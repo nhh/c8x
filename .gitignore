@@ -1,0 +1,8 @@
+node_modules
+dist
+backend
+*.db
+k8x.exe
+*.tsx
+.idea/
+k8x
