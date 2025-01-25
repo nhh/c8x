@@ -1,14 +1,10 @@
-/// <reference types="@kubernetix/types" />
+import {$env, $chart, Chart} from "c8x"
 
-import MyIngress, { MyIngressProps } from "./components/ingress";
-import Deployment, { MyDeploymentProps } from "./components/deployment";
+import MyIngress from "./components/ingress";
+import Deployment from "./components/deployment";
 import Service from "./components/service";
 
-const values: {
-  namespace: string;
-  ingress: MyIngressProps;
-  deployment: MyDeploymentProps;
-} = {
+const values = {
   namespace: $env.get<string>("WHOAMI_NAMESPACE") ?? "default",
   deployment: {
     replicas: $env.get<number>("WHOAMI_REPLICAS") ?? 1,
@@ -18,7 +14,7 @@ const values: {
   },
 };
 
-export default (): k8x.Chart => ({
+export default (): Chart => ({
   namespace: {
     kind: "Namespace",
     apiVersion: "v1",

@@ -1,0 +1,7 @@
+go build -o c8x ./main.go
+
+cp c8x npm/
+
+cd npm
+
+npm pack

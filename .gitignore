@@ -2,7 +2,8 @@ node_modules
 dist
 backend
 *.db
-k8x.exe
+c8x.exe
+c8x
 *.tsx
 .idea/
 k8x

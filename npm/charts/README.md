@@ -23,7 +23,7 @@ const values: {
   },
 };
 
-export default (): k8x.Chart => ({
+export default (): Chart => ({
   namespace: {
     kind: "Namespace",
     apiVersion: "v1",

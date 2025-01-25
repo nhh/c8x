@@ -1,0 +1,28 @@
+{
+  "name": "c8x",
+  "version": "0.0.1",
+  "description": "Deploy and manage kubernetes charts with cybernetes",
+  "main": "index.d.ts",
+  "type": "module",
+  "bin": {
+    "c8x": "c8x"
+  },
+  "files": [
+    "types.d.ts"
+  ],
+  "contributors": [
+    "Niklas Hanft <niklas.hanft@gmail.com>"
+  ],
+  "keywords": [
+    "kubernetes",
+    "cli",
+    "k8s",
+    "c8x"
+  ],
+  "author": "Niklas Hanft <niklas.hanft@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhh/c8x.git"
+  },
+  "license": "MIT"
+}

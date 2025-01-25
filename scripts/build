@@ -1,1 +1,1 @@
-go build -o k8x ./main.go
+go build -o c8x ./main.go

@@ -71,7 +71,7 @@ func __jsEnvGet(name string) interface{} {
 
 		// Try to parse stuff as number, might break stuff
 		// Dont know if https://1231412.de gets converted to 1231412
-		// Allows ts to write k8x.$env["SCALE"] instead of having to parse it: Number(k8x.$env["SCALE"])
+		// Allows ts to write $env["SCALE"] instead of having to parse it: Number($env["SCALE"])
 		i, err := strconv.Atoi(strings.TrimSpace(pair[1]))
 		if err != nil {
 			return strings.TrimSpace(pair[1])
@@ -111,7 +111,7 @@ func __jsEnvGetAsObject(name string) interface{} {
 
 		// Try to parse stuff as number, might break stuff
 		// Dont know if https://1231412.de gets converted to 1231412
-		// Allows ts to write k8x.$env["SCALE"] instead of having to parse it: Number(k8x.$env["SCALE"])
+		// Allows ts to write $env["SCALE"] instead of having to parse it: Number($env["SCALE"])
 		i, err := strconv.Atoi(value)
 		if err != nil {
 			if "true" == value {

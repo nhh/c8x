@@ -1,4 +1,6 @@
-export default (): k8x.Service => ({
+import {Service} from "c8x";
+
+export default (): Service => ({
   apiVersion: "v1",
   kind: "Service",
   spec: {

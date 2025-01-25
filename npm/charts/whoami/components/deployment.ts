@@ -1,8 +1,10 @@
+import {Deployment} from "c8x";
+
 export type MyDeploymentProps = {
   replicas: number;
 };
 
-export default (props: MyDeploymentProps): k8x.Deployment => ({
+export default (props: MyDeploymentProps): Deployment => ({
   apiVersion: "apps/v1",
   kind: "Deployment",
   spec: {

@@ -1,8 +1,10 @@
+import {Ingress, IngressPath} from "c8x";
+
 export type MyIngressProps = {
   domain: string;
 };
 
-const defaultBackend: k8x.IngressPath["backend"] = {
+const defaultBackend: IngressPath["backend"] = {
   service: {
     name: "whoami-svc",
     port: {
@@ -11,11 +13,11 @@ const defaultBackend: k8x.IngressPath["backend"] = {
   },
 };
 
-const paths: k8x.IngressPath[] = [
+const paths: IngressPath[] = [
   { path: "/", backend: defaultBackend, pathType: "ImplementationSpecific" },
 ];
 
-export default (props: MyIngressProps): k8x.Ingress => ({
+export default (props: MyIngressProps): Ingress => ({
   apiVersion: "networking.k8s.io/v1",
   kind: "Ingress",
   spec: {
