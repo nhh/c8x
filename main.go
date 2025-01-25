@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/kubernetix/k8x/v1/cmd"
-	"github.com/kubernetix/k8x/v1/internal/dotenv"
+	"github.com/kubernetix/c8x/cmd"
+	"github.com/kubernetix/c8x/internal/dotenv"
 	"runtime"
 )
 

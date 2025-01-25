@@ -1,6 +1,6 @@
 // Todo add better types for right side (string|number)
 declare const $env: {
-  /** Parses `K8X_MY_TEST=abc` into abc */
+  /** Parses `C8X_MY_TEST=abc` into abc */
   get<T>(name: string): T;
 
   /** Parses some env variables with the same prefix into a object
@@ -8,11 +8,11 @@ declare const $env: {
    * 
    * $env.get("INGRESS_CLASS_ANNOTATIONS")
    * -----------
-   * K8X_INGRESS_CLASS_ANNOTATIONS_KEY_1=nginx.ingress.kubernetes.io/app-root
-   * K8X_INGRESS_CLASS_ANNOTATIONS_VALUE_1='/var/www/html'
+   * C8X_INGRESS_CLASS_ANNOTATIONS_KEY_1=nginx.ingress.kubernetes.io/app-root
+   * C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_1='/var/www/html'
    * -----------
-   * K8X_INGRESS_CLASS_ANNOTATIONS_KEY_2=nginx.ingress.kubernetes.io/enable-cors
-   * K8X_INGRESS_CLASS_ANNOTATIONS_VALUE_2=true
+   * C8X_INGRESS_CLASS_ANNOTATIONS_KEY_2=nginx.ingress.kubernetes.io/enable-cors
+   * C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_2=true
    * -----------
    * {
    *   "nginx.ingress.kubernetes.io/app-root": '/var/www/html',
@@ -23,11 +23,11 @@ declare const $env: {
 
   /** Parses a env variables as list
    * Consider these Variables:
-   * K8X_MY_TEST_1=a
-   * K8X_MY_TEST_2=b
-   * K8X_MY_TEST_3=c
-   * K8X_MY_TEST_4=d
-   * K8X_MY_TEST_5=e
+   * C8X_MY_TEST_1=a
+   * C8X_MY_TEST_2=b
+   * C8X_MY_TEST_3=c
+   * C8X_MY_TEST_4=d
+   * C8X_MY_TEST_5=e
    * Will be parsed into
    * ["a", "b", "c", "d", "e"]
    */

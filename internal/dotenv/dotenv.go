@@ -8,13 +8,13 @@ import (
 )
 
 func Load() error {
-	envToLoad := os.Getenv("K8X_ENV")
+	envToLoad := os.Getenv("C8X_ENV")
 
 	if envToLoad == "" {
 		// Defaults to this file
 		envToLoad = ".env"
 	} else {
-		// Making .env.production out of K8X_ENV=production
+		// Making .env.production out of C8X_ENV=production
 		envToLoad = ".env." + envToLoad
 	}
 
@@ -58,12 +58,12 @@ func Load() error {
 		// Make KEY="VALUE" to KEY=VALUE
 		value := strings.Replace(pair[1], "\"", "", -1)
 
-		if !strings.HasPrefix(key, "K8X_") {
-			// Skip all variables that dont start with K8X_
+		if !strings.HasPrefix(key, "C8X_") {
+			// Skip all variables that dont start with C8X_
 			continue
 		}
 
-		key = strings.Replace(key, "K8X_", "", -1)
+		key = strings.Replace(key, "C8X_", "", -1)
 
 		err := os.Setenv(key, value)
 

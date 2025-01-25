@@ -1,4 +1,4 @@
-module github.com/kubernetix/k8x/v1
+module github.com/kubernetix/c8x
 
 go 1.22.0
 

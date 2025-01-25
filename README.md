@@ -4,7 +4,7 @@ Deploy and manage typesafe apps to kubernetes
 ## Features:
 
 - .env integration
-  - K8X_MY_VARIABLE
+  - C8X_MY_VARIABLE
 - Automatic namespace handling
   - Auto create/upgrade namespaces
 - Quickstart

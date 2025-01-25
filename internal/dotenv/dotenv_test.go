@@ -11,7 +11,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Configuring to use top level .env.test file
-	err := os.Setenv("K8X_ENV", "test")
+	err := os.Setenv("C8X_ENV", "test")
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -20,11 +20,11 @@ func TestLoad(t *testing.T) {
 	_ = Load()
 
 	if os.Getenv("KEY") != "" {
-		t.Fatalf(`KEY is not empty! Loading env variables without K8X prefix`)
+		t.Fatalf(`KEY is not empty! Loading env variables without c8x prefix`)
 	}
 
 	if os.Getenv("HEY") != "" {
-		t.Fatalf(`HEY is not empty! Loading env variables without K8X prefix`)
+		t.Fatalf(`HEY is not empty! Loading env variables without c8x prefix`)
 	}
 
 	if os.Getenv("TEST") != "TEST" {

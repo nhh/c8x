@@ -13,45 +13,42 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 }
 
-var chartTsx = `/// <reference types="@kubernetix/types" />
+var chartTsx = `
+import {Chart} from "c8x"
 
-export default () => (
-  <chart name={""} version={""} >
-  </chart>
-)
+// TODO: fix the compiler issues to have a working deployment
+export default (): Chart => {}
 `
 
 var packageJson = `{
   "name": "{{.packageName}}",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "dependencies": {
-    "@kubernetix/types": "0.0.1"
+    "c8x": "0.0.1"
   },
-  "chart": {
-    "appVersion": "1.0.0",
-    "kubeVersion": "1.31",
-    "type": "application",
-    "keywords": [
-      "cms",
-      "wordpress",
-      "author"
-    ],
-    "home": "https://github.com/kubernetix/charts/wordpress",
-    "maintainers": [
-      "Niklas Hanft"
-    ],
-    "icon": null,
-    "deprecated": false,
-    "annotations": []
-  }
+  "appVersion": "1.0.0",
+  "kubeVersion": "1.31",
+  "type": "application",
+  "keywords": [
+    "cms",
+    "wordpress",
+    "author"
+  ],
+  "home": "https://github.com/kubernetix/charts/wordpress",
+  "maintainers": [
+    "Niklas Hanft"
+  ],
+  "icon": null,
+  "deprecated": false,
+  "annotations": []
 }
 `
 
 var newCmd = &cobra.Command{
-	Use:     "new",
-	Short:   "Initialize a k8x chart. (chart.tsx, package.json)",
-	Example: "k8x new wordpress",
+	Use:     "init",
+	Short:   "Initialize a c8x chart. (index.ts, package.json)",
+	Example: "c8x init wordpress",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			cmd.Help()

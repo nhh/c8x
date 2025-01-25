@@ -5,7 +5,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "k8x",
+	Use:   "c8x",
 	Short: "Install and manage kubernets apps with tsx",
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()

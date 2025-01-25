@@ -3,12 +3,11 @@
   "version": "0.0.1",
   "description": "Deploy and manage kubernetes charts with cybernetes",
   "main": "index.d.ts",
-  "type": "module",
   "bin": {
     "c8x": "c8x"
   },
   "files": [
-    "types.d.ts"
+    "index.d.ts"
   ],
   "contributors": [
     "Niklas Hanft <niklas.hanft@gmail.com>"

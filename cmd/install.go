@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/kubernetix/k8x/v1/internal/k8s"
-	"github.com/kubernetix/k8x/v1/internal/ts"
+	"github.com/kubernetix/c8x/internal/k8s"
+	"github.com/kubernetix/c8x/internal/ts"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -16,7 +16,7 @@ func init() {
 
 var install = &cobra.Command{
 	Use:   "install",
-	Short: "Install a chart.tsx file into your k8s cluster",
+	Short: "Install a chart file into your k8s cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			_ = cmd.Help()

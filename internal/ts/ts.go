@@ -23,7 +23,7 @@ func Load(path string, debug bool) string {
 		EntryPoints: []string{path},
 		Bundle:      true,
 		Write:       false,
-		GlobalName:  "k8x",
+		GlobalName:  "c8x",
 		Format:      api.FormatIIFE,
 	}
 
@@ -53,11 +53,11 @@ func __jsEnvGet(name string) interface{} {
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
 
-		if strings.Index(pair[0], "K8X_") == -1 {
+		if strings.Index(pair[0], "C8X_") == -1 {
 			continue
 		}
 
-		if name != strings.Replace(pair[0], "K8X_", "", 1) {
+		if name != strings.Replace(pair[0], "C8X_", "", 1) {
 			continue
 		}
 
@@ -89,11 +89,11 @@ func __jsEnvGetAsObject(name string) interface{} {
 
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
-		if strings.Index(pair[0], "K8X_") == -1 {
+		if strings.Index(pair[0], "C8X_") == -1 {
 			continue
 		}
 
-		if !strings.HasPrefix(strings.Replace(pair[0], "K8X_", "", 1), name) {
+		if !strings.HasPrefix(strings.Replace(pair[0], "C8X_", "", 1), name) {
 			continue
 		}
 
@@ -101,11 +101,11 @@ func __jsEnvGetAsObject(name string) interface{} {
 			continue
 		}
 
-		// K8X_INGRESS_CLASS_ANNOTATIONS_KEY_1=nginx.ingress.kubernetes.io/app-root
-		// K8X_INGRESS_CLASS_ANNOTATIONS_VALUE_1=/var/www/html
+		// C8X_INGRESS_CLASS_ANNOTATIONS_KEY_1=nginx.ingress.kubernetes.io/app-root
+		// C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_1=/var/www/html
 
-		// K8X_INGRESS_CLASS_ANNOTATIONS_KEY_2=nginx.ingress.kubernetes.io/enable-cors
-		// K8X_INGRESS_CLASS_ANNOTATIONS_VALUE_2=true
+		// C8X_INGRESS_CLASS_ANNOTATIONS_KEY_2=nginx.ingress.kubernetes.io/enable-cors
+		// C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_2=true
 		key := os.Getenv(pair[0])
 		value := strings.TrimSpace(os.Getenv(strings.Replace(pair[0], "KEY", "VALUE", 1)))
 
@@ -180,7 +180,7 @@ func injectChartInfo(vm *goja.Runtime, path string) {
 func Run(code string, path string) map[string]interface{} {
 	vm := goja.New()
 
-	// Todo handle this better because one creates k8x the other expects it to exist
+	// Todo handle this better because one creates c8x the other expects it to exist
 	injectEnv(vm)
 	injectChartInfo(vm, path)
 
@@ -190,13 +190,13 @@ func Run(code string, path string) map[string]interface{} {
 		panic(err)
 	}
 
-	k8x, ok := goja.AssertFunction(vm.Get("k8x").ToObject(vm).Get("default"))
+	c8x, ok := goja.AssertFunction(vm.Get("c8x").ToObject(vm).Get("default"))
 
 	if !ok {
 		panic("Please make sure you are exporting a function: export default () => ({})")
 	}
 
-	obj, err := k8x(goja.Undefined())
+	obj, err := c8x(goja.Undefined())
 
 	if err != nil {
 		panic(err)

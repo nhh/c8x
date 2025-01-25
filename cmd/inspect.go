@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kubernetix/k8x/v1/internal/k8s"
-	"github.com/kubernetix/k8x/v1/internal/ts"
+	"github.com/kubernetix/c8x/internal/k8s"
+	"github.com/kubernetix/c8x/internal/ts"
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
@@ -108,7 +108,7 @@ func (m model) View() string {
 }
 
 func (m model) headerView() string {
-	title := titleStyle.Render("k8x render view")
+	title := titleStyle.Render("c8x render view")
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }

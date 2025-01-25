@@ -55,7 +55,7 @@ func PatchAndTransform(export map[string]interface{}) Chart {
 // Todo add error handling
 func ApplyChart(chart Chart) {
 	// create and open a temporary file
-	f, err := os.CreateTemp("", "k8x-tmpfile-") // in Go version older than 1.17 you can use ioutil.TempFile
+	f, err := os.CreateTemp("", "c8x-tmpfile-") // in Go version older than 1.17 you can use ioutil.TempFile
 	if err != nil {
 		log.Fatal(err)
 	}

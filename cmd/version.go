@@ -11,9 +11,8 @@ func init() {
 }
 
 var versionCmd = &cobra.Command{
-	Use:     "version",
-	Short:   "Print version control information",
-	Example: "k8x new wordpress",
+	Use:   "version",
+	Short: "Print version control information",
 	Run: func(cmd *cobra.Command, args []string) {
 		buildInfo, _ := debug.ReadBuildInfo()
 		fmt.Println(buildInfo.String())
