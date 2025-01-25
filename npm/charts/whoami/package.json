@@ -1,10 +1,14 @@
 {
   "name": "@c8x/whoami",
   "version": "0.0.1",
-  "private": true,
   "appVersion": "6.6.1",
   "kubeVersion": "1.31",
   "type": "module",
+  "files": [
+    "components/*",
+    "index.ts",
+    ".env.example"
+  ],
   "keywords": [
     "cms",
     "wordpress",
