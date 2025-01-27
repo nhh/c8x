@@ -1,6 +1,6 @@
 {
   "name": "@c8x/whoami",
-  "version": "0.0.1",
+  "version": "0.0.7",
   "appVersion": "6.6.1",
   "kubeVersion": "1.31",
   "type": "module",
@@ -19,8 +19,8 @@
   "maintainers": [
     "Niklas Hanft"
   ],
-  "devDependencies": {
-    "c8x": "0.0.1"
+  "dependencies": {
+    "c8x": "^0.0.13"
   },
   "icon": "",
   "deprecated": false,

@@ -4,6 +4,6 @@ mv c8x npm/
 
 cd npm
 
-npm pack
+npm publish --access public
 
 rm c8x

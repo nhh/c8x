@@ -1,6 +1,6 @@
 {
   "name": "c8x",
-  "version": "0.0.1",
+  "version": "0.0.13",
   "description": "Deploy and manage kubernetes charts with cybernetes",
   "main": "index.d.ts",
   "bin": {
@@ -23,5 +23,8 @@
     "type": "git",
     "url": "git+https://github.com/nhh/c8x.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^5.7.3"
+  }
 }

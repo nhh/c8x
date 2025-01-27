@@ -1,4 +1,4 @@
-import {$env, $chart, Chart} from "c8x"
+import {Chart} from "c8x"
 
 import MyIngress from "./components/ingress";
 import Deployment from "./components/deployment";
