@@ -8,3 +8,4 @@ c8x
 .idea/
 c8x
 !npm/c8x
+*.tgz

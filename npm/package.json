@@ -30,10 +30,5 @@
   "license": "MIT",
   "dependencies": {
     "typescript": "^5.7.3"
-  },
-  "optionalDependencies": {
-    "@c8x/linux-x64": "0.0.13",
-    "@c8x/darwin-x64": "0.0.13",
-    "@c8x/win-x64": "0.0.13"
   }
 }

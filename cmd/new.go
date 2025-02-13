@@ -13,8 +13,7 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 }
 
-var chartTsx = `
-import {Chart} from "c8x"
+var chartTsx = `import {Chart} from "c8x"
 
 // TODO: fix the compiler issues to have a working deployment
 export default (): Chart => {}
@@ -25,7 +24,7 @@ var packageJson = `{
   "private": true,
   "version": "0.0.1",
   "dependencies": {
-    "c8x": "0.0.1"
+    "c8x": "0.0.17"
   },
   "appVersion": "1.0.0",
   "kubeVersion": "1.31",
@@ -66,7 +65,7 @@ var newCmd = &cobra.Command{
 			panic(err)
 		}
 
-		err = os.Mkdir(chartPath, 0666)
+		err = os.Mkdir(chartPath, 0777)
 
 		if err != nil {
 			panic(err)
@@ -78,7 +77,7 @@ var newCmd = &cobra.Command{
 			panic(err)
 		}
 
-		err = os.WriteFile(path.Join(chartPath, "chart.tsx"), []byte(chartTsx), 0666)
+		err = os.WriteFile(path.Join(chartPath, "chart.ts"), []byte(chartTsx), 0666)
 
 		if err != nil {
 			panic(err)
