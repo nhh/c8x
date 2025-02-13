@@ -1,6 +1,6 @@
 {
   "name": "c8x",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "Deploy and manage kubernetes charts with cybernetes",
   "main": "index.d.ts",
   "bin": {
