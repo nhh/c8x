@@ -12,6 +12,6 @@ fetch(downloadUrl)
     .then(res => res.status === 200 ? res : Promise.reject(`Download failed: ${res.status}/ ${res.statusText}`))
     .then(res => res.arrayBuffer())
     .then(bytes => fs.writeFileSync(binaryName, new Uint8Array(bytes)))
-    .catch(e => console.error(e));
+    .catch(e => throw e);
 
 fs.chmodSync(binaryName, fs.constants.S_IRWXU)
