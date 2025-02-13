@@ -7,3 +7,4 @@ c8x
 *.tsx
 .idea/
 c8x
+!npm/c8x
