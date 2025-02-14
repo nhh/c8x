@@ -43,6 +43,15 @@ Reuse existing infrastructure and code features for enhanced developer experienc
 ## Non Goals
 - Replace helm
 
+## Why configuration as code?
+- Mill uses scala as configuration and has a indepth article about it's advantages
+  - https://mill-build.org/mill/depth/why-scala.html
+- Pulumi takes it even further and specifies the whole infrastructure as code
+  - https://www.pulumi.com/
+- Spring does this since 2008 to avoid large xml configurations
+  - https://docs.spring.io/spring-javaconfig/docs/1.0.0.M4/reference/htmlsingle/spring-javaconfig-reference.html
+
+
 ## Helm differentiation
 
 I feel like helm was built by the ops side of devops people. c8x is built by the dev side of devops people.
