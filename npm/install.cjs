@@ -14,4 +14,6 @@ fetch(downloadUrl)
     .then(bytes => fs.writeFileSync(binaryName, new Uint8Array(bytes)))
     .catch(e => console.error(e));
 
-fs.chmodSync(binaryName, fs.constants.S_IRWXU)
+if(platform !== "win32") {
+    fs.chmodSync(binaryName, fs.constants.S_IRWXU)
+}
