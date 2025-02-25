@@ -52,6 +52,9 @@ Reuse existing infrastructure and code features for enhanced developer experienc
   - https://docs.spring.io/spring-javaconfig/docs/1.0.0.M4/reference/htmlsingle/spring-javaconfig-reference.html
 - Yoke uses a similar concept
   - https://github.com/yokecd/yoke?tab=readme-ov-file
+## Why not using wasm to allow charts to be written in multiple languages?
+c8x main concern is type safety. That excludes a lot of languages that are dynamic by default.
+I want to the k8s charts to be discoverable, that only really works through the help of a compiler and tools like the language server.
 
 ## Helm differentiation
 
