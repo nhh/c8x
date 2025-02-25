@@ -50,7 +50,8 @@ Reuse existing infrastructure and code features for enhanced developer experienc
   - https://www.pulumi.com/
 - Spring does this since 2008 to avoid large xml configurations
   - https://docs.spring.io/spring-javaconfig/docs/1.0.0.M4/reference/htmlsingle/spring-javaconfig-reference.html
-
+- Yoke uses a similar concept
+  - https://github.com/yokecd/yoke?tab=readme-ov-file
 
 ## Helm differentiation
 
