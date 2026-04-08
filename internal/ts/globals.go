@@ -337,6 +337,92 @@ func injectHttp(vm *goja.Runtime, perms Permissions) error {
 	return vm.Set("$http", obj)
 }
 
+// --- $release ---
+
+func injectRelease(vm *goja.Runtime, perms Permissions, namespace, releaseName string) error {
+	obj := vm.NewObject()
+
+	var fetched bool
+	var release *k8s.Release
+
+	fetchOnce := func() {
+		if fetched {
+			return
+		}
+		fetched = true
+		if !perms.Cluster {
+			return
+		}
+		client, err := k8s.NewClient()
+		if err != nil {
+			return
+		}
+		release, _ = client.GetCurrentRelease(namespace, releaseName)
+	}
+
+	obj.Set("exists", vm.ToValue(false)) // default, overwritten by getter below
+
+	// Use a JS getter so $release.exists triggers the lazy fetch
+	vm.RunString(`Object.defineProperty(` + `$release` + `, "exists", { get: function() { return this._exists(); }, configurable: true })`)
+
+	// Simpler approach: expose methods that lazy-fetch
+	obj.Set("_exists", func() bool {
+		fetchOnce()
+		return release != nil
+	})
+
+	obj.Set("_get", func() map[string]interface{} {
+		fetchOnce()
+		if release == nil {
+			return map[string]interface{}{
+				"exists":       false,
+				"revision":     0,
+				"status":       "",
+				"chartName":    "",
+				"chartVersion": "",
+				"env":          map[string]interface{}{},
+				"deployedAt":   "",
+			}
+		}
+		envMap := make(map[string]interface{}, len(release.Env))
+		for k, v := range release.Env {
+			envMap[k] = v
+		}
+		return map[string]interface{}{
+			"exists":       true,
+			"revision":     release.Revision,
+			"status":       release.Status,
+			"chartName":    release.ChartName,
+			"chartVersion": release.ChartVersion,
+			"env":          envMap,
+			"deployedAt":   release.DeployedAt.Format("2006-01-02T15:04:05Z"),
+		}
+	})
+
+	if err := vm.Set("$release", obj); err != nil {
+		return err
+	}
+
+	// Wire up property access via a JS wrapper that calls _get()
+	_, err := vm.RunString(`
+		(function() {
+			var _rel = $release;
+			var _cache = null;
+			function get() { if (!_cache) _cache = _rel._get(); return _cache; }
+			$release = {
+				get exists() { return get().exists; },
+				get revision() { return get().revision; },
+				get status() { return get().status; },
+				get chartName() { return get().chartName; },
+				get chartVersion() { return get().chartVersion; },
+				get env() { return get().env; },
+				get deployedAt() { return get().deployedAt; },
+			};
+		})();
+	`)
+	return err
+}
+
 // --- $cluster ---
 
 func injectCluster(vm *goja.Runtime, perms Permissions) error {

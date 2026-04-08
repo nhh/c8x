@@ -106,6 +106,24 @@ declare global {
     annotations: string[];
   };
 
+  /** Information about the currently deployed release. Requires --allow-cluster. */
+  const $release: {
+    /** Whether a release is currently deployed */
+    readonly exists: boolean;
+    /** Current revision number (0 if not deployed) */
+    readonly revision: number;
+    /** Release status: "deployed" | "superseded" | "failed" */
+    readonly status: string;
+    /** Chart name of the current release */
+    readonly chartName: string;
+    /** Chart version of the current release */
+    readonly chartVersion: string;
+    /** Environment variables at the time of the current deployment */
+    readonly env: Record<string, string>;
+    /** ISO timestamp of the current deployment */
+    readonly deployedAt: string;
+  };
+
   const $base64: {
     /** Encode a string to base64 */
     encode(input: string): string;

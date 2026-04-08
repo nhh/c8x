@@ -202,11 +202,18 @@ func parseChartExport(raw map[string]interface{}) (k8s.ChartExport, error) {
 	return export, nil
 }
 
+// RunOptions configures the chart execution environment.
+type RunOptions struct {
+	Permissions Permissions
+	Namespace   string // for $release lookup (empty = skip $release)
+	ReleaseName string // for $release lookup (empty = skip $release)
+}
+
 // Executes tsx and returns its result
 func Run(code string, path string, perms ...Permissions) (k8s.ChartExport, error) {
-	perm := NoPermissions()
+	opts := RunOptions{}
 	if len(perms) > 0 {
-		perm = perms[0]
+		opts.Permissions = perms[0]
 	}
 
 	vm := goja.New()
@@ -237,7 +244,7 @@ func Run(code string, path string, perms ...Permissions) (k8s.ChartExport, error
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectFile(vm, chartDir, perm); err != nil {
+	if err := injectFile(vm, chartDir, opts.Permissions); err != nil {
 		return k8s.ChartExport{}, err
 	}
 
@@ -245,12 +252,18 @@ func Run(code string, path string, perms ...Permissions) (k8s.ChartExport, error
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectHttp(vm, perm); err != nil {
+	if err := injectHttp(vm, opts.Permissions); err != nil {
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectCluster(vm, perm); err != nil {
+	if err := injectCluster(vm, opts.Permissions); err != nil {
 		return k8s.ChartExport{}, err
+	}
+
+	if opts.Namespace != "" && opts.ReleaseName != "" {
+		if err := injectRelease(vm, opts.Permissions, opts.Namespace, opts.ReleaseName); err != nil {
+			return k8s.ChartExport{}, err
+		}
 	}
 
 	if _, err := vm.RunString(code); err != nil {
