@@ -44,7 +44,13 @@ var install = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if err := k8s.ApplyChart(chart); err != nil {
+		client, err := k8s.NewClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error connecting to cluster: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := k8s.ApplyChart(client, chart); err != nil {
 			fmt.Fprintf(os.Stderr, "Error applying chart: %v\n", err)
 			os.Exit(1)
 		}

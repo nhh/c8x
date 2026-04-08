@@ -3,8 +3,6 @@ package k8s
 import (
 	"fmt"
 	"gopkg.in/yaml.v3"
-	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -36,51 +34,24 @@ func PatchAndTransform(export ChartExport) Chart {
 	return chart
 }
 
-func kubectlApply(f *os.File) (string, error) {
-	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("kubectl apply: %s: %w", strings.TrimSpace(string(output)), err)
-	}
-	return string(output), nil
-}
-
-func ApplyChart(chart Chart) error {
-	f, err := os.CreateTemp("", "c8x-tmpfile-")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-
+func ApplyChart(client *Client, chart Chart) error {
 	if chart.Namespace != "" {
-		if _, err := f.Write([]byte(chart.Namespace)); err != nil {
-			return fmt.Errorf("writing namespace to temp file: %w", err)
-		}
-
-		output, err := kubectlApply(f)
+		output, err := client.Apply([]byte(chart.Namespace))
 		if err != nil {
-			return err
+			return fmt.Errorf("applying namespace: %w", err)
 		}
-		fmt.Print(output)
-
-		if err := f.Truncate(0); err != nil {
-			return fmt.Errorf("truncating temp file: %w", err)
-		}
-		if _, err := f.Seek(0, 0); err != nil {
-			return fmt.Errorf("seeking temp file: %w", err)
+		if output != "" {
+			fmt.Println(output)
 		}
 	}
 
-	if _, err := f.Write([]byte(chart.Content)); err != nil {
-		return fmt.Errorf("writing chart to temp file: %w", err)
-	}
-
-	output, err := kubectlApply(f)
+	output, err := client.Apply([]byte(chart.Content))
 	if err != nil {
-		return err
+		return fmt.Errorf("applying chart: %w", err)
 	}
-	fmt.Print(output)
+	if output != "" {
+		fmt.Println(output)
+	}
 
 	return nil
 }

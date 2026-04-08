@@ -9,13 +9,14 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dop251/goja"
+	"github.com/kubernetix/c8x/internal/k8s"
 	"gopkg.in/yaml.v3"
 )
 
@@ -311,139 +312,111 @@ func injectHttp(vm *goja.Runtime) error {
 
 // --- $cluster ---
 
-// kubectl runs a kubectl command and returns stdout. If kubectl is not available
-// or the command fails, it returns an empty string and the error.
-func kubectl(args ...string) (string, error) {
-	cmd := exec.Command("kubectl", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("$cluster: kubectl %s: %w", strings.Join(args, " "), err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 func injectCluster(vm *goja.Runtime) error {
+	var client *k8s.Client
+	var clientErr error
+	var once sync.Once
+
+	getClient := func() (*k8s.Client, error) {
+		once.Do(func() { client, clientErr = k8s.NewClient() })
+		return client, clientErr
+	}
+
 	obj := vm.NewObject()
 
-	// $cluster.version() → "1.31.2"
+	// $cluster.version() → "1.31"
 	obj.Set("version", func() (string, error) {
-		out, err := kubectl("version", "--output=json")
+		c, err := getClient()
 		if err != nil {
 			return "", err
 		}
-		var v map[string]interface{}
-		if err := json.Unmarshal([]byte(out), &v); err != nil {
-			return "", fmt.Errorf("$cluster.version: %w", err)
-		}
-		if sv, ok := v["serverVersion"].(map[string]interface{}); ok {
-			major, _ := sv["major"].(string)
-			minor, _ := sv["minor"].(string)
-			return major + "." + minor, nil
-		}
-		return "", fmt.Errorf("$cluster.version: cannot parse server version")
+		return c.ServerVersion()
 	})
 
 	// $cluster.versionAtLeast("1.25") → true/false
 	obj.Set("versionAtLeast", func(minVersion string) (bool, error) {
-		out, err := kubectl("version", "--output=json")
+		c, err := getClient()
 		if err != nil {
 			return false, err
 		}
-		var v map[string]interface{}
-		if err := json.Unmarshal([]byte(out), &v); err != nil {
+		version, err := c.ServerVersion()
+		if err != nil {
 			return false, err
 		}
-		sv, ok := v["serverVersion"].(map[string]interface{})
-		if !ok {
-			return false, fmt.Errorf("$cluster.versionAtLeast: cannot parse server version")
-		}
-
-		majorStr, _ := sv["major"].(string)
-		minorStr, _ := sv["minor"].(string)
-		// minor may contain "+" suffix like "31+"
-		minorStr = strings.TrimRight(minorStr, "+")
-
-		major, _ := strconv.Atoi(majorStr)
-		minor, _ := strconv.Atoi(minorStr)
-
-		parts := strings.SplitN(minVersion, ".", 2)
-		reqMajor, _ := strconv.Atoi(parts[0])
-		reqMinor := 0
-		if len(parts) > 1 {
-			reqMinor, _ = strconv.Atoi(parts[1])
-		}
-
-		if major > reqMajor {
-			return true, nil
-		}
-		if major == reqMajor && minor >= reqMinor {
-			return true, nil
-		}
-		return false, nil
+		return compareVersions(version, minVersion), nil
 	})
 
 	// $cluster.nodeCount() → number
 	obj.Set("nodeCount", func() (int, error) {
-		out, err := kubectl("get", "nodes", "--no-headers", "-o", "name")
+		c, err := getClient()
 		if err != nil {
 			return 0, err
 		}
-		if out == "" {
-			return 0, nil
-		}
-		return len(strings.Split(out, "\n")), nil
+		return c.NodeCount()
 	})
 
 	// $cluster.apiAvailable("gateway.networking.k8s.io/v1") → true/false
 	obj.Set("apiAvailable", func(apiVersion string) bool {
-		_, err := kubectl("api-resources", "--api-group="+extractGroup(apiVersion), "--no-headers")
-		return err == nil
+		c, err := getClient()
+		if err != nil {
+			return false
+		}
+		return c.APIAvailable(apiVersion)
 	})
 
 	// $cluster.crdExists("certificates.cert-manager.io") → true/false
 	obj.Set("crdExists", func(name string) bool {
-		_, err := kubectl("get", "crd", name, "--no-headers")
-		return err == nil
+		c, err := getClient()
+		if err != nil {
+			return false
+		}
+		return c.CRDExists(name)
 	})
 
 	// $cluster.exists(apiVersion, kind, namespace, name) → true/false
 	obj.Set("exists", func(apiVersion, kind, namespace, name string) bool {
-		args := []string{"get", kind, name, "--no-headers"}
-		if namespace != "" {
-			args = append(args, "-n", namespace)
+		c, err := getClient()
+		if err != nil {
+			return false
 		}
-		_, err := kubectl(args...)
-		return err == nil
+		return c.ResourceExists(kind, namespace, name)
 	})
 
-	// $cluster.list(apiVersion, kind, namespace?) → []object
+	// $cluster.list(kind, namespace?) → []object
 	obj.Set("list", func(kind string, args ...string) (interface{}, error) {
-		cmdArgs := []string{"get", kind, "-o", "json"}
-		if len(args) > 0 && args[0] != "" {
-			cmdArgs = append(cmdArgs, "-n", args[0])
-		}
-		out, err := kubectl(cmdArgs...)
+		c, err := getClient()
 		if err != nil {
 			return nil, err
 		}
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(out), &result); err != nil {
-			return nil, fmt.Errorf("$cluster.list: %w", err)
+		ns := ""
+		if len(args) > 0 {
+			ns = args[0]
 		}
-		items, _ := result["items"].([]interface{})
-		return items, nil
+		return c.ListResources(kind, ns)
 	})
 
 	return vm.Set("$cluster", obj)
 }
 
-// extractGroup extracts the API group from an apiVersion string.
-// "networking.k8s.io/v1" → "networking.k8s.io"
-// "v1" → "" (core group)
-func extractGroup(apiVersion string) string {
-	parts := strings.SplitN(apiVersion, "/", 2)
-	if len(parts) == 2 {
-		return parts[0]
+// compareVersions returns true if actual >= required.
+func compareVersions(actual, required string) bool {
+	actualParts := strings.SplitN(actual, ".", 2)
+	requiredParts := strings.SplitN(required, ".", 2)
+
+	actualMajor, _ := strconv.Atoi(actualParts[0])
+	actualMinor := 0
+	if len(actualParts) > 1 {
+		actualMinor, _ = strconv.Atoi(strings.TrimRight(actualParts[1], "+"))
 	}
-	return ""
+
+	reqMajor, _ := strconv.Atoi(requiredParts[0])
+	reqMinor := 0
+	if len(requiredParts) > 1 {
+		reqMinor, _ = strconv.Atoi(requiredParts[1])
+	}
+
+	if actualMajor > reqMajor {
+		return true
+	}
+	return actualMajor == reqMajor && actualMinor >= reqMinor
 }
