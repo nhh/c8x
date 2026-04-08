@@ -6,37 +6,44 @@ on:
       - "v*.*.*"
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Run tests
+        run: go test ./...
+
   build:
+    needs: test
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: amd64
             npm_pkg: cli-linux-x64
             binary: c8x
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: arm64
             npm_pkg: cli-linux-arm64
             binary: c8x
-          - os: macos-13
-            goos: darwin
+          - goos: darwin
             goarch: amd64
             npm_pkg: cli-darwin-x64
             binary: c8x
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: arm64
             npm_pkg: cli-darwin-arm64
             binary: c8x
-          - os: windows-latest
-            goos: windows
+          - goos: windows
             goarch: amd64
             npm_pkg: cli-win32-x64
             binary: c8x.exe
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +54,7 @@ jobs:
 
       - name: Build binary
         env:
+          CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build -o ${{ matrix.binary }} .
