@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kubernetix/c8x/internal/k8s"
 	"github.com/kubernetix/c8x/internal/ts"
