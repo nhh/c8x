@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -103,6 +104,52 @@ func (c *Client) Apply(yamlBytes []byte) (string, error) {
 		}
 
 		results = append(results, fmt.Sprintf("%s/%s configured", strings.ToLower(result.GetKind()), result.GetName()))
+	}
+
+	return strings.Join(results, "\n"), nil
+}
+
+// Delete removes each resource defined in the YAML bytes from the cluster.
+func (c *Client) Delete(yamlBytes []byte) (string, error) {
+	var results []string
+
+	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlBytes), 4096)
+	for {
+		var obj unstructured.Unstructured
+		err := decoder.Decode(&obj)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("decoding YAML: %w", err)
+		}
+
+		if obj.GetAPIVersion() == "" || obj.GetKind() == "" {
+			continue
+		}
+
+		gvk := obj.GroupVersionKind()
+		mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err != nil {
+			continue // skip unknown resources
+		}
+
+		var resource dynamic.ResourceInterface
+		if obj.GetNamespace() != "" {
+			resource = c.dynamicClient.Resource(mapping.Resource).Namespace(obj.GetNamespace())
+		} else {
+			resource = c.dynamicClient.Resource(mapping.Resource)
+		}
+
+		err = resource.Delete(context.TODO(), obj.GetName(), metav1.DeleteOptions{})
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				results = append(results, fmt.Sprintf("warning: %s/%s: %v", strings.ToLower(obj.GetKind()), obj.GetName(), err))
+			}
+			continue
+		}
+
+		results = append(results, fmt.Sprintf("%s/%s deleted", strings.ToLower(obj.GetKind()), obj.GetName()))
 	}
 
 	return strings.Join(results, "\n"), nil
