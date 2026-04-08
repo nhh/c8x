@@ -626,3 +626,520 @@ spec:
 		t.Fatal("release ConfigMap not found in cluster")
 	}
 }
+
+// ==================== Client Edge Cases ====================
+
+func TestClientCRDExists(t *testing.T) {
+	if testClient.CRDExists("nonexistent.example.com") {
+		t.Fatal("expected false for nonexistent CRD")
+	}
+}
+
+func TestClientApplyIdempotent(t *testing.T) {
+	yaml := `apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-idempotent-test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: idem-cm
+  namespace: c8x-idempotent-test
+data:
+  key: value`
+
+	// Apply twice
+	_, err := testClient.Apply([]byte(yaml))
+	if err != nil {
+		t.Fatalf("first apply failed: %v", err)
+	}
+	_, err = testClient.Apply([]byte(yaml))
+	if err != nil {
+		t.Fatalf("second apply failed (should be idempotent): %v", err)
+	}
+
+	if !testClient.ResourceExists("ConfigMap", "c8x-idempotent-test", "idem-cm") {
+		t.Fatal("ConfigMap should exist after double apply")
+	}
+
+	testClient.Delete([]byte(yaml))
+}
+
+func TestClientApplyInvalidYAML(t *testing.T) {
+	_, err := testClient.Apply([]byte("this is not valid yaml at all {{{"))
+	// Should not panic, should return error or skip
+	if err != nil {
+		t.Logf("Got expected error for invalid YAML: %v", err)
+	}
+}
+
+func TestClientDeleteNonexistent(t *testing.T) {
+	yaml := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: does-not-exist-at-all
+  namespace: default`
+
+	// Should not panic or error fatally
+	_, err := testClient.Delete([]byte(yaml))
+	if err != nil {
+		t.Fatalf("Delete of nonexistent should not error: %v", err)
+	}
+}
+
+// ==================== Individual Lifecycle Tests ====================
+
+func installChart(t *testing.T, chartFile, ns, name string) *k8s.Release {
+	t.Helper()
+	chart := compileAndApply(t, chartFile)
+	release := &k8s.Release{
+		Name: name, Revision: 1, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: chart.Combined(), DeployedAt: time.Now(),
+		Trigger: k8s.TriggerManual, Resources: k8s.ExtractResources(chart.Combined()),
+		ResourceCount: len(k8s.ExtractResources(chart.Combined())),
+		Runtime: k8s.CollectRuntime(), Deployer: k8s.CollectDeployer(),
+	}
+	if err := testClient.SaveRelease(release); err != nil {
+		t.Fatalf("SaveRelease failed: %v", err)
+	}
+	return release
+}
+
+func cleanupNs(ns string) {
+	testClient.DeleteReleases(ns, ns)
+	testClient.Delete([]byte(fmt.Sprintf(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: %s`, ns)))
+}
+
+func TestInstallCreatesReleaseConfigMap(t *testing.T) {
+	ns := "c8x-install-cm-test"
+	defer cleanupNs(ns)
+
+	installChart(t, chartPath, ns, ns)
+
+	// Verify ConfigMap exists
+	if !testClient.ResourceExists("ConfigMap", ns, "c8x.release."+ns+".v1") {
+		t.Fatal("release ConfigMap should exist after install")
+	}
+}
+
+func TestInstallDuplicateBlocked(t *testing.T) {
+	ns := "c8x-dup-test"
+	defer cleanupNs(ns)
+
+	installChart(t, chartPath, ns, ns)
+
+	// Try to save another v1 → should fail
+	dup := &k8s.Release{
+		Name: ns, Revision: 1, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: "dup", DeployedAt: time.Now(), Trigger: k8s.TriggerManual,
+	}
+	err := testClient.SaveRelease(dup)
+	if err == nil {
+		t.Fatal("expected error when saving duplicate revision")
+	}
+
+	// GetCurrentRelease should still return the original
+	current, _ := testClient.GetCurrentRelease(ns, ns)
+	if current == nil || current.Revision != 1 {
+		t.Fatal("original release should still be current")
+	}
+}
+
+func TestUpgradeWithoutInstallFails(t *testing.T) {
+	ns := "c8x-no-install-test"
+
+	current, err := testClient.GetCurrentRelease(ns, ns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != nil {
+		t.Fatal("expected no release before install")
+	}
+}
+
+func TestRollbackToSpecificRevision(t *testing.T) {
+	ns := "c8x-rollback-spec-test"
+	defer cleanupNs(ns)
+
+	// Install v1
+	chart1 := compileAndApply(t, chartPath)
+	r1 := &k8s.Release{
+		Name: ns, Revision: 1, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: chart1.Combined(), DeployedAt: time.Now(),
+		Trigger: k8s.TriggerManual,
+	}
+	testClient.SaveRelease(r1)
+
+	// Upgrade to v2
+	chart2 := compileAndApply(t, chartV2Path)
+	testClient.UpdateReleaseStatus(r1, k8s.StatusSuperseded)
+	r2 := &k8s.Release{
+		Name: ns, Revision: 2, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: chart2.Combined(), DeployedAt: time.Now(),
+		Trigger: k8s.TriggerManual,
+	}
+	testClient.SaveRelease(r2)
+
+	// Upgrade to v3 (same as v2)
+	testClient.UpdateReleaseStatus(r2, k8s.StatusSuperseded)
+	r3 := &k8s.Release{
+		Name: ns, Revision: 3, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: chart2.Combined(), DeployedAt: time.Now(),
+		Trigger: k8s.TriggerManual,
+	}
+	testClient.SaveRelease(r3)
+
+	// Rollback to v1
+	target, _ := testClient.GetRelease(ns, ns, 1)
+	testClient.Apply([]byte(target.Manifest))
+	testClient.UpdateReleaseStatus(r3, k8s.StatusSuperseded)
+	prevRev := 1
+	r4 := &k8s.Release{
+		Name: ns, Revision: 4, Status: k8s.StatusDeployed,
+		Namespace: ns, Manifest: target.Manifest, DeployedAt: time.Now(),
+		Trigger: k8s.TriggerRollback, PreviousRevision: &prevRev,
+	}
+	testClient.SaveRelease(r4)
+
+	// Verify 4 revisions
+	releases, _ := testClient.ListReleases(ns, ns)
+	if len(releases) != 4 {
+		t.Fatalf("expected 4 revisions, got %d", len(releases))
+	}
+
+	current, _ := testClient.GetCurrentRelease(ns, ns)
+	if current.Revision != 4 || current.Trigger != k8s.TriggerRollback {
+		t.Fatalf("expected v4 rollback, got v%d %s", current.Revision, current.Trigger)
+	}
+	if current.PreviousRevision == nil || *current.PreviousRevision != 1 {
+		t.Fatal("expected previousRevision=1")
+	}
+}
+
+func TestUninstallDeletesResources(t *testing.T) {
+	ns := "c8x-uninstall-test"
+
+	installChart(t, chartPath, ns, ns)
+
+	// Verify resources exist
+	if !testClient.ResourceExists("ConfigMap", ns, "test-config") {
+		t.Fatal("ConfigMap should exist before uninstall")
+	}
+
+	// Uninstall
+	current, _ := testClient.GetCurrentRelease(ns, ns)
+	testClient.Delete([]byte(current.Manifest))
+	testClient.DeleteReleases(ns, ns)
+
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify resources gone
+	if testClient.ResourceExists("ConfigMap", ns, "test-config") {
+		t.Fatal("ConfigMap should be gone after uninstall")
+	}
+
+	// Verify releases gone
+	releases, _ := testClient.ListReleases(ns, ns)
+	if len(releases) != 0 {
+		t.Fatalf("expected 0 releases, got %d", len(releases))
+	}
+
+	cleanupNs(ns)
+}
+
+func TestUninstallNonexistentFails(t *testing.T) {
+	current, _ := testClient.GetCurrentRelease("nonexistent-ns-xyz", "nonexistent-xyz")
+	if current != nil {
+		t.Fatal("expected nil for nonexistent release")
+	}
+}
+
+// ==================== $cluster Pipeline Tests ====================
+
+func TestClusterCRDExistsInChart(t *testing.T) {
+	code := `
+		var hasCM = $cluster.crdExists("nonexistent.example.com");
+		export default () => ({
+			namespace: { apiVersion: "v1", kind: "Namespace", metadata: { name: "c8x-crd-test" } },
+			components: [{
+				apiVersion: "v1", kind: "ConfigMap",
+				metadata: { name: "crd-check" },
+				data: { hasCM: String(hasCM) }
+			}]
+		})
+	`
+	export := compileInlineChart(t, code)
+	data := export.Components[0]["data"].(map[string]interface{})
+	if data["hasCM"] != "false" {
+		t.Fatalf("expected false, got %v", data["hasCM"])
+	}
+}
+
+func TestClusterResourceExistsInChart(t *testing.T) {
+	// Create a ConfigMap first
+	testClient.Apply([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-resexist-test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probe-target
+  namespace: c8x-resexist-test
+data:
+  exists: "true"`))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-resexist-test`))
+
+	code := `
+		var found = $cluster.exists("v1", "ConfigMap", "c8x-resexist-test", "probe-target");
+		var notFound = $cluster.exists("v1", "ConfigMap", "c8x-resexist-test", "nope");
+		export default () => ({
+			namespace: { apiVersion: "v1", kind: "Namespace", metadata: { name: "c8x-resexist-test" } },
+			components: [{
+				apiVersion: "v1", kind: "ConfigMap",
+				metadata: { name: "exist-result" },
+				data: { found: String(found), notFound: String(notFound) }
+			}]
+		})
+	`
+	export := compileInlineChart(t, code)
+	data := export.Components[0]["data"].(map[string]interface{})
+	if data["found"] != "true" {
+		t.Fatalf("expected found=true, got %v", data["found"])
+	}
+	if data["notFound"] != "false" {
+		t.Fatalf("expected notFound=false, got %v", data["notFound"])
+	}
+}
+
+func TestClusterVersionAtLeastInChart(t *testing.T) {
+	export := compileFixtureChart(t, filepath.Join(testdataDir, "chart-cluster-version.ts"))
+	data := export.Components[0]["data"].(map[string]interface{})
+	// KinD runs modern K8s, should be >= 1.25
+	if data["isModern"] != "true" {
+		t.Fatalf("expected isModern=true, got %v", data["isModern"])
+	}
+}
+
+// ==================== Globals Pipeline in Cluster ====================
+
+func TestFileReadApplied(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-with-file.ts")
+	export := compileFixtureChart(t, chartFile)
+	chart := k8s.PatchAndTransform(export)
+
+	testClient.Apply([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-file-test`))
+
+	if !testClient.ResourceExists("ConfigMap", "c8x-file-test", "nginx-config") {
+		t.Fatal("ConfigMap nginx-config should exist")
+	}
+}
+
+func TestAssertBlocksDeploy(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-assert-fail.ts")
+	code, err := ts.Load(chartFile, false)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	_, err = ts.Run(code, chartFile, ts.AllPermissions())
+	if err == nil {
+		t.Fatal("expected $assert to block chart execution")
+	}
+	if !strings.Contains(err.Error(), "intentionally fails") {
+		t.Fatalf("expected assertion message, got %v", err)
+	}
+}
+
+func TestHashInAnnotationApplied(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-with-hash.ts")
+	export := compileFixtureChart(t, chartFile)
+	chart := k8s.PatchAndTransform(export)
+
+	testClient.Apply([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-hash-test`))
+
+	cms, _ := testClient.ListResources("ConfigMap", "c8x-hash-test")
+	for _, cm := range cms {
+		meta, _ := cm["metadata"].(map[string]interface{})
+		if meta["name"] == "hashed-config" {
+			annotations, _ := meta["annotations"].(map[string]interface{})
+			hash, _ := annotations["c8x/config-hash"].(string)
+			if len(hash) != 64 {
+				t.Fatalf("expected 64-char sha256 hash annotation, got %q", hash)
+			}
+			return
+		}
+	}
+	t.Fatal("hashed-config ConfigMap not found")
+}
+
+func TestBase64InSecretApplied(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-with-base64.ts")
+	export := compileFixtureChart(t, chartFile)
+	chart := k8s.PatchAndTransform(export)
+
+	testClient.Apply([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-b64-test`))
+
+	if !testClient.ResourceExists("Secret", "c8x-b64-test", "encoded-secret") {
+		t.Fatal("Secret encoded-secret should exist")
+	}
+}
+
+func TestYamlParseApplied(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-with-yaml.ts")
+	export := compileFixtureChart(t, chartFile)
+	chart := k8s.PatchAndTransform(export)
+
+	testClient.Apply([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-yaml-test`))
+
+	if !testClient.ResourceExists("ConfigMap", "c8x-yaml-test", "prometheus-config") {
+		t.Fatal("ConfigMap prometheus-config should exist")
+	}
+}
+
+// ==================== Permissions in Cluster ====================
+
+func TestFileBlockedWithoutPermission(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-with-file.ts")
+	code, _ := ts.Load(chartFile, false)
+
+	_, err := ts.Run(code, chartFile) // no permissions
+	if err == nil {
+		t.Fatal("expected $file.read to be blocked without --allow-file")
+	}
+	if !strings.Contains(err.Error(), "allow-file") {
+		t.Fatalf("expected allow-file hint, got %v", err)
+	}
+}
+
+func TestClusterBlockedWithoutPermission(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-cluster-version.ts")
+	code, _ := ts.Load(chartFile, false)
+
+	_, err := ts.Run(code, chartFile) // no permissions
+	if err == nil {
+		t.Fatal("expected $cluster to be blocked without --allow-cluster")
+	}
+	if !strings.Contains(err.Error(), "allow-cluster") {
+		t.Fatalf("expected allow-cluster hint, got %v", err)
+	}
+}
+
+// ==================== Edge Cases ====================
+
+func TestApplyLargeChart(t *testing.T) {
+	chartFile := filepath.Join(testdataDir, "chart-large.ts")
+	export := compileFixtureChart(t, chartFile)
+	chart := k8s.PatchAndTransform(export)
+
+	_, err := testClient.Apply([]byte(chart.Combined()))
+	if err != nil {
+		t.Fatalf("Apply large chart failed: %v", err)
+	}
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-large-test`))
+
+	if len(export.Components) != 20 {
+		t.Fatalf("expected 20 components, got %d", len(export.Components))
+	}
+
+	// Spot check a few
+	if !testClient.ResourceExists("ConfigMap", "c8x-large-test", "cm-0") {
+		t.Fatal("cm-0 should exist")
+	}
+	if !testClient.ResourceExists("ConfigMap", "c8x-large-test", "cm-19") {
+		t.Fatal("cm-19 should exist")
+	}
+}
+
+func TestNamespaceAutoCreated(t *testing.T) {
+	chart := compileAndApply(t, chartPath)
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-integration-test`))
+
+	// Namespace from chart should have been created by Apply
+	if !testClient.ResourceExists("Namespace", "", "c8x-integration-test") {
+		t.Fatal("namespace should be auto-created from chart")
+	}
+}
+
+func TestApplyIdempotentFullChart(t *testing.T) {
+	chart := compileAndApply(t, chartPath)
+	defer testClient.Delete([]byte(chart.Combined()))
+	defer testClient.Delete([]byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: c8x-integration-test`))
+
+	// Apply same chart again → should not error
+	if err := k8s.ApplyChart(testClient, chart); err != nil {
+		t.Fatalf("second apply should be idempotent: %v", err)
+	}
+}
+
+// ==================== Helpers ====================
+
+func compileInlineChart(t *testing.T, code string) k8s.ChartExport {
+	t.Helper()
+	dir := t.TempDir()
+	tsFile := filepath.Join(dir, "chart.ts")
+	os.WriteFile(tsFile, []byte(code), 0644)
+	os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0644)
+
+	jsCode, err := ts.Load(tsFile, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	export, err := ts.Run(jsCode, tsFile, ts.AllPermissions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return export
+}
+
+func compileFixtureChart(t *testing.T, chartFile string) k8s.ChartExport {
+	t.Helper()
+	code, err := ts.Load(chartFile, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	export, err := ts.Run(code, chartFile, ts.AllPermissions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return export
+}
