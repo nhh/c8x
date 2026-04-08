@@ -275,7 +275,7 @@ func TestFileRead(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "config.txt"), []byte("key=value"), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.read("config.txt")`)
 	if err != nil {
@@ -290,7 +290,7 @@ func TestFileReadNotFound(t *testing.T) {
 	dir := t.TempDir()
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	_, err := vm.RunString(`$file.read("nope.txt")`)
 	if err == nil {
@@ -303,7 +303,7 @@ func TestFileExists(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "exists.txt"), []byte("hi"), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.exists("exists.txt")`)
 	if err != nil {
@@ -318,7 +318,7 @@ func TestFileExistsNotFound(t *testing.T) {
 	dir := t.TempDir()
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.exists("nope.txt")`)
 	if err != nil {
@@ -336,7 +336,7 @@ func TestFileReadRelativePath(t *testing.T) {
 	os.WriteFile(filepath.Join(sub, "tls.crt"), []byte("CERT-DATA"), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.read("certs/tls.crt")`)
 	if err != nil {
@@ -357,7 +357,7 @@ func TestHttpGet(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.get("%s")`, server.URL))
 	if err != nil {
@@ -381,7 +381,7 @@ func TestHttpGetText(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.getText("%s")`, server.URL))
 	if err != nil {
@@ -400,7 +400,7 @@ func TestHttpGetJSON(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`JSON.stringify($http.getJSON("%s"))`, server.URL))
 	if err != nil {
@@ -426,7 +426,7 @@ func TestHttpPost(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.post("%s", "hello body")`, server.URL))
 	if err != nil {
@@ -457,7 +457,7 @@ func TestHttpPostJSON(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	code := fmt.Sprintf(`JSON.stringify($http.postJSON("%s", {msg: "deploy started"}))`, server.URL)
 	v, err := vm.RunString(code)
@@ -485,7 +485,7 @@ func TestHttpGetWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	code := fmt.Sprintf(`$http.get("%s", { headers: { "Authorization": "Bearer token123" } })`, server.URL)
 	_, err := vm.RunString(code)
@@ -500,7 +500,7 @@ func TestHttpGetWithHeaders(t *testing.T) {
 
 func TestHttpGetUnreachable(t *testing.T) {
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	_, err := vm.RunString(`$http.get("http://127.0.0.1:1")`)
 	if err == nil {
@@ -530,7 +530,7 @@ func TestPipelineBase64InSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +558,7 @@ func TestPipelineHashAsAnnotation(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +585,7 @@ func TestPipelineAssertFails(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	_, err := Run(jsCode, tsFile)
+	_, err := Run(jsCode, tsFile, AllPermissions())
 	if err == nil {
 		t.Fatal("expected error from $assert")
 	}
@@ -611,7 +611,7 @@ func TestPipelineFileReadInConfigMap(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +648,7 @@ func TestPipelineHttpInChart(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}

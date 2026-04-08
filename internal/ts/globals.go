@@ -107,27 +107,51 @@ func injectAssert(vm *goja.Runtime) error {
 
 // --- $file ---
 
-func injectFile(vm *goja.Runtime, chartDir string) error {
+func injectFile(vm *goja.Runtime, chartDir string, perms Permissions) error {
 	obj := vm.NewObject()
 
-	resolve := func(path string) string {
+	resolve := func(path string) (string, error) {
+		var resolved string
 		if filepath.IsAbs(path) {
-			return path
+			resolved = filepath.Clean(path)
+		} else {
+			resolved = filepath.Clean(filepath.Join(chartDir, path))
 		}
-		return filepath.Join(chartDir, path)
+
+		// Prevent path traversal outside chart directory
+		absChartDir, _ := filepath.Abs(chartDir)
+		absResolved, _ := filepath.Abs(resolved)
+		if !strings.HasPrefix(absResolved, absChartDir) {
+			return "", fmt.Errorf("$file: path %q escapes chart directory", path)
+		}
+		return resolved, nil
 	}
 
 	obj.Set("read", func(path string) (string, error) {
-		data, err := os.ReadFile(resolve(path))
+		if !perms.File {
+			return "", denyError("$file.read", "allow-file")
+		}
+		resolved, err := resolve(path)
+		if err != nil {
+			return "", err
+		}
+		data, err := os.ReadFile(resolved)
 		if err != nil {
 			return "", fmt.Errorf("$file.read: %w", err)
 		}
 		return string(data), nil
 	})
 
-	obj.Set("exists", func(path string) bool {
-		_, err := os.Stat(resolve(path))
-		return err == nil
+	obj.Set("exists", func(path string) (bool, error) {
+		if !perms.File {
+			return false, denyError("$file.exists", "allow-file")
+		}
+		resolved, err := resolve(path)
+		if err != nil {
+			return false, err
+		}
+		_, statErr := os.Stat(resolved)
+		return statErr == nil, nil
 	})
 
 	return vm.Set("$file", obj)
@@ -184,12 +208,15 @@ func normalizeYaml(v interface{}) interface{} {
 
 // --- $http ---
 
-func injectHttp(vm *goja.Runtime) error {
+func injectHttp(vm *goja.Runtime, perms Permissions) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	obj := vm.NewObject()
 
 	doRequest := func(method, url string, body io.Reader, options map[string]interface{}) (map[string]interface{}, error) {
+		if !perms.Http {
+			return nil, denyError("$http", "allow-http")
+		}
 		req, err := http.NewRequest(method, url, body)
 		if err != nil {
 			return nil, fmt.Errorf("$http: %w", err)
@@ -312,12 +339,15 @@ func injectHttp(vm *goja.Runtime) error {
 
 // --- $cluster ---
 
-func injectCluster(vm *goja.Runtime) error {
+func injectCluster(vm *goja.Runtime, perms Permissions) error {
 	var client *k8s.Client
 	var clientErr error
 	var once sync.Once
 
 	getClient := func() (*k8s.Client, error) {
+		if !perms.Cluster {
+			return nil, denyError("$cluster", "allow-cluster")
+		}
 		once.Do(func() { client, clientErr = k8s.NewClient() })
 		return client, clientErr
 	}

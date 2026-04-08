@@ -197,7 +197,7 @@ func TestPipelineClusterApiGateSwitch(t *testing.T) {
 func setupClusterVM(t *testing.T) *goja.Runtime {
 	t.Helper()
 	vm := goja.New()
-	if err := injectCluster(vm); err != nil {
+	if err := injectCluster(vm, AllPermissions()); err != nil {
 		t.Fatal(err)
 	}
 	return vm
@@ -220,7 +220,7 @@ func runTestChart(t *testing.T, dir, code string) k8s.ChartExport {
 		t.Fatal(err)
 	}
 
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}

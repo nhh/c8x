@@ -130,7 +130,7 @@ var inspect = &cobra.Command{
 			os.Exit(-1)
 		}
 
-		chart, err := compileChart(args[0])
+		chart, err := compileChart(args[0], buildPermissions())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

@@ -332,7 +332,7 @@ func TestFileReadEmptyFile(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "empty.txt"), []byte(""), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.read("empty.txt")`)
 	if err != nil {
@@ -348,7 +348,7 @@ func TestFileReadBinaryContent(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "bin"), []byte{0x00, 0xFF, 0x42}, 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	// Should not crash
 	_, err := vm.RunString(`$file.read("bin")`)
@@ -363,7 +363,7 @@ func TestFileReadMultilineContent(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "multi.txt"), []byte(content), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, _ := vm.RunString(`$file.read("multi.txt")`)
 	if v.String() != content {
@@ -377,7 +377,7 @@ func TestFileReadLargeFile(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "large.txt"), []byte(large), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.read("large.txt").length`)
 	if err != nil {
@@ -393,7 +393,7 @@ func TestFileExistsDirectory(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "subdir"), 0755)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, _ := vm.RunString(`$file.exists("subdir")`)
 	if !v.ToBoolean() {
@@ -408,7 +408,7 @@ func TestFileReadNestedDeep(t *testing.T) {
 	os.WriteFile(filepath.Join(deep, "deep.txt"), []byte("found"), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.read("a/b/c/deep.txt")`)
 	if err != nil {
@@ -424,7 +424,7 @@ func TestFileReadJsonAndParse(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"port":8080,"debug":true}`), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`JSON.parse($file.read("config.json")).port`)
 	if err != nil {
@@ -440,7 +440,7 @@ func TestFileConditionalRead(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "optional.conf"), []byte("custom"), 0644)
 
 	vm := goja.New()
-	injectFile(vm, dir)
+	injectFile(vm, dir, AllPermissions())
 
 	v, err := vm.RunString(`$file.exists("optional.conf") ? $file.read("optional.conf") : "default"`)
 	if err != nil {
@@ -452,7 +452,7 @@ func TestFileConditionalRead(t *testing.T) {
 
 	// Without file
 	vm2 := goja.New()
-	injectFile(vm2, t.TempDir())
+	injectFile(vm2, t.TempDir(), AllPermissions())
 	v2, _ := vm2.RunString(`$file.exists("optional.conf") ? $file.read("optional.conf") : "default"`)
 	if v2.String() != "default" {
 		t.Fatalf("expected 'default', got %q", v2.String())
@@ -469,7 +469,7 @@ func TestHttpGetReturnsHeaders(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.get("%s").headers["X-Custom"]`, server.URL))
 	if err != nil {
@@ -488,7 +488,7 @@ func TestHttpGet404(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.get("%s")`, server.URL))
 	if err != nil {
@@ -512,7 +512,7 @@ func TestHttpGet500(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.get("%s").status`, server.URL))
 	if err != nil {
@@ -534,7 +534,7 @@ func TestHttpGetMultipleHeaders(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	code := fmt.Sprintf(`$http.getText("%s", { headers: { "X-Api-Key": "key123", "Accept": "text/plain" } })`, server.URL)
 	v, err := vm.RunString(code)
@@ -553,7 +553,7 @@ func TestHttpGetJSONArray(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.getJSON("%s").length`, server.URL))
 	if err != nil {
@@ -577,7 +577,7 @@ func TestHttpGetJSONNested(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.getJSON("%s").data.secrets.password`, server.URL))
 	if err != nil {
@@ -595,7 +595,7 @@ func TestHttpGetJSONInvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	_, err := vm.RunString(fmt.Sprintf(`$http.getJSON("%s")`, server.URL))
 	if err == nil {
@@ -613,7 +613,7 @@ func TestHttpPostEmptyBody(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	v, err := vm.RunString(fmt.Sprintf(`$http.post("%s", "").status`, server.URL))
 	if err != nil {
@@ -636,7 +636,7 @@ func TestHttpPostJSONComplex(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	code := fmt.Sprintf(`$http.postJSON("%s", {
 		name: "deploy",
@@ -667,7 +667,7 @@ func TestHttpGetMethodVerification(t *testing.T) {
 	defer server.Close()
 
 	vm := goja.New()
-	injectHttp(vm)
+	injectHttp(vm, AllPermissions())
 
 	vm.RunString(fmt.Sprintf(`$http.get("%s")`, server.URL))
 	if receivedMethod != "GET" {
@@ -708,7 +708,7 @@ func TestPipelineCombinedGlobals(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +755,7 @@ func TestPipelineAssertWithEnv(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -797,7 +797,7 @@ func TestPipelineHttpWithBase64AndFile(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -839,7 +839,7 @@ func TestPipelineConditionalComponentsWithFileCheck(t *testing.T) {
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1070,7 +1070,7 @@ scrape_configs:
 	os.WriteFile(tsFile, []byte(code), 0644)
 
 	jsCode, _ := Load(tsFile, false)
-	export, err := Run(jsCode, tsFile)
+	export, err := Run(jsCode, tsFile, AllPermissions())
 	if err != nil {
 		t.Fatal(err)
 	}

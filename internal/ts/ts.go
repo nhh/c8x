@@ -203,7 +203,12 @@ func parseChartExport(raw map[string]interface{}) (k8s.ChartExport, error) {
 }
 
 // Executes tsx and returns its result
-func Run(code string, path string) (k8s.ChartExport, error) {
+func Run(code string, path string, perms ...Permissions) (k8s.ChartExport, error) {
+	perm := NoPermissions()
+	if len(perms) > 0 {
+		perm = perms[0]
+	}
+
 	vm := goja.New()
 
 	if err := injectEnv(vm); err != nil {
@@ -232,7 +237,7 @@ func Run(code string, path string) (k8s.ChartExport, error) {
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectFile(vm, chartDir); err != nil {
+	if err := injectFile(vm, chartDir, perm); err != nil {
 		return k8s.ChartExport{}, err
 	}
 
@@ -240,11 +245,11 @@ func Run(code string, path string) (k8s.ChartExport, error) {
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectHttp(vm); err != nil {
+	if err := injectHttp(vm, perm); err != nil {
 		return k8s.ChartExport{}, err
 	}
 
-	if err := injectCluster(vm); err != nil {
+	if err := injectCluster(vm, perm); err != nil {
 		return k8s.ChartExport{}, err
 	}
 
