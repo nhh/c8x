@@ -1,0 +1,41 @@
+import { ServiceAccount, ClusterRole, ClusterRoleBinding } from "c8x";
+
+export const serviceAccount = (): ServiceAccount => ({
+  apiVersion: "v1",
+  kind: "ServiceAccount",
+  metadata: { name: "prometheus" },
+});
+
+export const clusterRole = (): ClusterRole => ({
+  apiVersion: "rbac.authorization.k8s.io/v1",
+  kind: "ClusterRole",
+  metadata: { name: "prometheus" },
+  rules: [
+    {
+      apiGroups: [""],
+      resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"],
+      verbs: ["get", "list", "watch"],
+    },
+    {
+      apiGroups: ["extensions", "networking.k8s.io"],
+      resources: ["ingresses"],
+      verbs: ["get", "list", "watch"],
+    },
+    {
+      nonResourceURLs: ["/metrics"],
+      verbs: ["get"],
+    },
+  ],
+});
+
+export const clusterRoleBinding = (): ClusterRoleBinding => ({
+  apiVersion: "rbac.authorization.k8s.io/v1",
+  kind: "ClusterRoleBinding",
+  metadata: { name: "prometheus" },
+  roleRef: {
+    apiGroup: "rbac.authorization.k8s.io",
+    kind: "ClusterRole",
+    name: "prometheus",
+  },
+  subjects: [{ kind: "ServiceAccount", name: "prometheus", namespace: "monitoring" }],
+});

@@ -1,0 +1,17 @@
+{
+  "name": "@c8x/wordpress",
+  "version": "0.0.1",
+  "appVersion": "6.7.0",
+  "kubeVersion": "1.31",
+  "type": "module",
+  "files": ["components/*", "index.ts", ".env.example"],
+  "keywords": ["wordpress", "cms", "blog", "php"],
+  "home": "https://github.com/kubernetix/charts/wordpress",
+  "repository": "https://github.com/kubernetix/charts/wordpress",
+  "maintainers": ["Niklas Hanft"],
+  "dependencies": {
+    "c8x": "^0.0.19"
+  },
+  "deprecated": false,
+  "annotations": []
+}

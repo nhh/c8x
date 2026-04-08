@@ -1,0 +1,18 @@
+import { ConfigMap } from "c8x";
+
+export default (): ConfigMap => ({
+  apiVersion: "v1",
+  kind: "ConfigMap",
+  metadata: { name: "grafana-datasources" },
+  data: {
+    "datasources.yaml": `apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+`,
+  },
+});

@@ -1,0 +1,17 @@
+{
+  "name": "@c8x/monitoring",
+  "version": "0.0.1",
+  "appVersion": "2.55.0",
+  "kubeVersion": "1.31",
+  "type": "module",
+  "files": ["components/*", "index.ts", ".env.example"],
+  "keywords": ["monitoring", "prometheus", "grafana", "metrics", "observability"],
+  "home": "https://github.com/kubernetix/charts/monitoring",
+  "repository": "https://github.com/kubernetix/charts/monitoring",
+  "maintainers": ["Niklas Hanft"],
+  "dependencies": {
+    "c8x": "^0.0.19"
+  },
+  "deprecated": false,
+  "annotations": []
+}

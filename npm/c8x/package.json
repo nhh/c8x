@@ -1,0 +1,26 @@
+{
+  "name": "c8x",
+  "version": "0.0.20",
+  "description": "Type-safe Kubernetes charts with TypeScript",
+  "main": "index.d.ts",
+  "types": "index.d.ts",
+  "files": [
+    "index.d.ts"
+  ],
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "c8x",
+    "charts",
+    "typescript"
+  ],
+  "author": "Niklas Hanft <niklas.hanft@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhh/c8x.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "kubernetes-types": "^1.30.0"
+  }
+}
