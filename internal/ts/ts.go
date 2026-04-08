@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/dop251/goja"
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/kubernetix/c8x/internal/k8s"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,8 +14,7 @@ import (
 )
 
 // Loads and transpiles tsx files
-func Load(path string, debug bool) string {
-
+func Load(path string, debug bool) (string, error) {
 	options := api.BuildOptions{
 		Loader: map[string]api.Loader{
 			".ts": api.LoaderTS,
@@ -29,31 +29,37 @@ func Load(path string, debug bool) string {
 
 	result := api.Build(options)
 
-	for _, message := range result.Errors {
-		fmt.Println(message)
+	if len(result.Errors) > 0 {
+		msgs := make([]string, len(result.Errors))
+		for i, msg := range result.Errors {
+			msgs[i] = msg.Text
+		}
+		return "", fmt.Errorf("esbuild: %s", strings.Join(msgs, "; "))
 	}
 
 	for _, message := range result.Warnings {
 		fmt.Println(message)
 	}
 
-	if len(result.Errors) > 0 {
-		fmt.Println("Cannot transform js")
+	if len(result.OutputFiles) == 0 {
+		return "", fmt.Errorf("esbuild produced no output for %s", path)
 	}
+
+	code := string(result.OutputFiles[0].Contents)
 
 	if debug {
-		fmt.Print(string(result.OutputFiles[0].Contents))
+		fmt.Print(code)
 	}
 
-	return string(result.OutputFiles[0].Contents)
+	return code, nil
 }
 
 // Can return number or string
 func __jsEnvGet(name string) interface{} {
 	for _, e := range os.Environ() {
-		pair := strings.Split(e, "=")
+		pair := strings.SplitN(e, "=", 2)
 
-		if strings.Index(pair[0], "C8X_") == -1 {
+		if !strings.HasPrefix(pair[0], "C8X_") {
 			continue
 		}
 
@@ -61,23 +67,19 @@ func __jsEnvGet(name string) interface{} {
 			continue
 		}
 
-		if "true" == pair[1] {
+		if pair[1] == "true" {
 			return true
 		}
 
-		if "false" == pair[1] {
+		if pair[1] == "false" {
 			return false
 		}
 
-		// Try to parse stuff as number, might break stuff
-		// Dont know if https://1231412.de gets converted to 1231412
-		// Allows ts to write $env["SCALE"] instead of having to parse it: Number($env["SCALE"])
 		i, err := strconv.Atoi(strings.TrimSpace(pair[1]))
 		if err != nil {
 			return strings.TrimSpace(pair[1])
-		} else {
-			return i
 		}
+		return i
 	}
 
 	return nil
@@ -88,8 +90,9 @@ func __jsEnvGetAsObject(name string) interface{} {
 	m := make(map[string]interface{})
 
 	for _, e := range os.Environ() {
-		pair := strings.Split(e, "=")
-		if strings.Index(pair[0], "C8X_") == -1 {
+		pair := strings.SplitN(e, "=", 2)
+
+		if !strings.HasPrefix(pair[0], "C8X_") {
 			continue
 		}
 
@@ -101,25 +104,17 @@ func __jsEnvGetAsObject(name string) interface{} {
 			continue
 		}
 
-		// C8X_INGRESS_CLASS_ANNOTATIONS_KEY_1=nginx.ingress.kubernetes.io/app-root
-		// C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_1=/var/www/html
-
-		// C8X_INGRESS_CLASS_ANNOTATIONS_KEY_2=nginx.ingress.kubernetes.io/enable-cors
-		// C8X_INGRESS_CLASS_ANNOTATIONS_VALUE_2=true
 		key := os.Getenv(pair[0])
 		value := strings.TrimSpace(os.Getenv(strings.Replace(pair[0], "KEY", "VALUE", 1)))
 
-		// Try to parse stuff as number, might break stuff
-		// Dont know if https://1231412.de gets converted to 1231412
-		// Allows ts to write $env["SCALE"] instead of having to parse it: Number($env["SCALE"])
 		i, err := strconv.Atoi(value)
 		if err != nil {
-			if "true" == value {
+			if value == "true" {
 				m[key] = true
 				continue
 			}
 
-			if "false" == value {
+			if value == "false" {
 				m[key] = false
 				continue
 			}
@@ -133,108 +128,160 @@ func __jsEnvGetAsObject(name string) interface{} {
 	return m
 }
 
-func injectEnv(vm *goja.Runtime) {
+func injectEnv(vm *goja.Runtime) error {
 	obj := vm.NewObject()
 
-	err := obj.ToObject(vm).Set("get", __jsEnvGet)
-	if err != nil {
-		panic("Cannot inject $env.get")
+	if err := obj.ToObject(vm).Set("get", __jsEnvGet); err != nil {
+		return fmt.Errorf("injecting $env.get: %w", err)
 	}
 
-	err = obj.ToObject(vm).Set("getAsObject", __jsEnvGetAsObject)
-	if err != nil {
-		panic("Cannot inject $env.getAsObject")
+	if err := obj.ToObject(vm).Set("getAsObject", __jsEnvGetAsObject); err != nil {
+		return fmt.Errorf("injecting $env.getAsObject: %w", err)
 	}
 
-	err = vm.Set("$env", obj)
-
-	if err != nil {
-		panic("Cannot set $env obj to vm")
+	if err := vm.Set("$env", obj); err != nil {
+		return fmt.Errorf("setting $env on vm: %w", err)
 	}
 
+	return nil
 }
 
-func injectChartInfo(vm *goja.Runtime, path string) {
+func injectChartInfo(vm *goja.Runtime, path string) error {
 	dir, _ := filepath.Split(path)
-
-	packageJson := filepath.Join(dir, "./package.json")
+	packageJson := filepath.Join(dir, "package.json")
 
 	if _, err := os.Stat(packageJson); errors.Is(err, os.ErrNotExist) {
-		fmt.Println("INFO: No package.json detected, ignoring chart information")
-		return
+		return nil
 	}
 
-	fileOutput, _ := os.ReadFile(packageJson)
+	fileOutput, err := os.ReadFile(packageJson)
+	if err != nil {
+		return fmt.Errorf("reading package.json: %w", err)
+	}
 
 	var pjson any
-	_ = json.Unmarshal(fileOutput, &pjson)
-
-	err := vm.Set("$chart", pjson)
-
-	if err != nil {
-		panic("Cannot set $env obj to vm")
+	if err := json.Unmarshal(fileOutput, &pjson); err != nil {
+		return fmt.Errorf("parsing package.json: %w", err)
 	}
+
+	if err := vm.Set("$chart", pjson); err != nil {
+		return fmt.Errorf("setting $chart on vm: %w", err)
+	}
+
+	return nil
+}
+
+// parseChartExport converts the raw Goja output into a typed ChartExport.
+func parseChartExport(raw map[string]interface{}) (k8s.ChartExport, error) {
+	export := k8s.ChartExport{}
+
+	// Parse namespace (optional)
+	if ns, ok := raw["namespace"].(map[string]interface{}); ok {
+		export.Namespace = k8s.K8sResource(ns)
+	}
+
+	// Parse components
+	rawComponents, ok := raw["components"].([]interface{})
+	if !ok && raw["components"] != nil {
+		return export, fmt.Errorf("components must be an array")
+	}
+
+	export.Components = make([]k8s.K8sResource, 0, len(rawComponents))
+	for _, c := range rawComponents {
+		if c == nil {
+			export.Components = append(export.Components, nil)
+			continue
+		}
+		comp, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		export.Components = append(export.Components, k8s.K8sResource(comp))
+	}
+
+	return export, nil
 }
 
 // Executes tsx and returns its result
-func Run(code string, path string) map[string]interface{} {
+func Run(code string, path string) (k8s.ChartExport, error) {
 	vm := goja.New()
 
-	// Todo handle this better because one creates c8x the other expects it to exist
-	injectEnv(vm)
-	injectChartInfo(vm, path)
+	if err := injectEnv(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
 
-	_, err := vm.RunString(code)
+	if err := injectChartInfo(vm, path); err != nil {
+		return k8s.ChartExport{}, err
+	}
 
-	if err != nil {
-		panic(err)
+	chartDir, _ := filepath.Split(path)
+
+	if err := injectBase64(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectHash(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectLog(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectAssert(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectFile(vm, chartDir); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectYaml(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectHttp(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if err := injectCluster(vm); err != nil {
+		return k8s.ChartExport{}, err
+	}
+
+	if _, err := vm.RunString(code); err != nil {
+		return k8s.ChartExport{}, fmt.Errorf("executing chart code: %w", err)
 	}
 
 	c8x, ok := goja.AssertFunction(vm.Get("c8x").ToObject(vm).Get("default"))
-
 	if !ok {
-		panic("Please make sure you are exporting a function: export default () => ({})")
+		return k8s.ChartExport{}, fmt.Errorf("chart must export a default function: export default () => ({})")
 	}
 
 	obj, err := c8x(goja.Undefined())
-
 	if err != nil {
-		panic(err)
+		return k8s.ChartExport{}, fmt.Errorf("calling chart default function: %w", err)
 	}
 
-	k8sExport, ok := obj.Export().(map[string]interface{})
-
+	raw, ok := obj.Export().(map[string]interface{})
 	if !ok {
-		panic("Cant cast to object")
+		return k8s.ChartExport{}, fmt.Errorf("chart default function must return an object")
 	}
 
-	// Well thats actually wild
-	name, ok := k8sExport["namespace"].(map[string]interface{})["metadata"].(map[string]interface{})["name"]
+	export, err := parseChartExport(raw)
+	if err != nil {
+		return k8s.ChartExport{}, err
+	}
 
-	// Patching namespaces
-	if name != nil && ok {
-		for _, component := range k8sExport["components"].([]interface{}) {
+	// Patch namespace into components
+	nsName := export.NamespaceName()
+	if nsName != "" {
+		for _, component := range export.Components {
 			if component == nil {
 				continue
 			}
-
-			comp, _ := component.(map[string]interface{})
-
-			if comp == nil {
-				comp = make(map[string]interface{})
-			}
-
-			metadata, _ := comp["metadata"].(map[string]interface{})
-
-			if metadata == nil {
-				m := make(map[string]interface{})
-				comp["metadata"] = m
-				continue
-			}
-
-			metadata["namespace"] = name
+			component.SetNamespace(nsName)
 		}
 	}
 
-	return k8sExport
+	return export, nil
 }

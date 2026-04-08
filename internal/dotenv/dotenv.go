@@ -8,6 +8,16 @@ import (
 )
 
 func Load() error {
+	cwd, err := os.Getwd()
+
+	if err != nil {
+		return fmt.Errorf("getting current working directory: %w", err)
+	}
+
+	return LoadFrom(cwd)
+}
+
+func LoadFrom(dir string) error {
 	envToLoad := os.Getenv("C8X_ENV")
 
 	if envToLoad == "" {
@@ -18,26 +28,24 @@ func Load() error {
 		envToLoad = ".env." + envToLoad
 	}
 
-	cwd, err := os.Getwd()
+	filePath := path.Join(dir, envToLoad)
 
-	if err != nil {
-		return fmt.Errorf("getting current working directory: %w", err)
-	}
-
-	_, err = os.Stat(path.Join(cwd, envToLoad))
+	_, err := os.Stat(filePath)
 
 	if err != nil {
 		return nil
 	}
 
-	file, err := os.ReadFile(envToLoad)
+	file, err := os.ReadFile(filePath)
 
 	if err != nil {
 		return fmt.Errorf("reading dot env file: %s: %w", envToLoad, err)
 	}
 
-	// Split by newlines
-	lines := strings.Split(strings.TrimSpace(string(file)), "\n")
+	// Normalize \r\n to \n for Windows compatibility
+	content := strings.ReplaceAll(strings.TrimSpace(string(file)), "\r\n", "\n")
+
+	lines := strings.Split(content, "\n")
 
 	if len(lines) == 0 {
 		// The file is empty :/
@@ -46,7 +54,7 @@ func Load() error {
 
 	for _, line := range lines {
 
-		pair := strings.Split(line, "=")
+		pair := strings.SplitN(line, "=", 2)
 
 		if len(pair) != 2 {
 			// Ignore empty lines, comments and single sentences that dont have = innit
@@ -54,16 +62,19 @@ func Load() error {
 		}
 
 		key := pair[0]
+		value := pair[1]
 
-		// Make KEY="VALUE" to KEY=VALUE
-		value := strings.Replace(pair[1], "\"", "", -1)
+		// Strip surrounding quotes only (not embedded ones)
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1 : len(value)-1]
+		}
 
 		if !strings.HasPrefix(key, "C8X_") {
 			// Skip all variables that dont start with C8X_
 			continue
 		}
 
-		key = strings.Replace(key, "C8X_", "", -1)
+		key = strings.TrimPrefix(key, "C8X_")
 
 		err := os.Setenv(key, value)
 

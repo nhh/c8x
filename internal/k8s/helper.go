@@ -3,11 +3,9 @@ package k8s
 import (
 	"fmt"
 	"gopkg.in/yaml.v3"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 type Chart struct {
@@ -15,92 +13,76 @@ type Chart struct {
 	Content   string
 }
 
-func HasValidNamespace(namespace interface{}) bool {
-	if namespace == nil {
-		return false
-	}
-
-	if namespace == "" {
-		return false
-	}
-
-	return true
-}
-
-func PatchAndTransform(export map[string]interface{}) Chart {
+func PatchAndTransform(export ChartExport) Chart {
 	content := []string{""}
 
 	chart := Chart{}
 
-	for _, component := range export["components"].([]interface{}) {
+	for _, component := range export.Components {
 		if component == nil {
 			continue
 		}
-		bts, _ := yaml.Marshal(component)
+		bts, _ := yaml.Marshal(map[string]interface{}(component))
 		content = append(content, string(bts))
 	}
 
 	chart.Content = strings.Join(content, "---\n")
 
-	namespace := export["namespace"]
-
-	if HasValidNamespace(namespace) {
-		nsyml, _ := yaml.Marshal(namespace)
+	if export.Namespace != nil {
+		nsyml, _ := yaml.Marshal(map[string]interface{}(export.Namespace))
 		chart.Namespace = string(nsyml)
 	}
 
 	return chart
 }
 
-// Todo add error handling
-func ApplyChart(chart Chart) {
-	// create and open a temporary file
-	f, err := os.CreateTemp("", "c8x-tmpfile-") // in Go version older than 1.17 you can use ioutil.TempFile
+func kubectlApply(f *os.File) (string, error) {
+	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("kubectl apply: %s: %w", strings.TrimSpace(string(output)), err)
 	}
-	// close and remove the temporary file at the end of the program
+	return string(output), nil
+}
+
+func ApplyChart(chart Chart) error {
+	f, err := os.CreateTemp("", "c8x-tmpfile-")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
 	defer f.Close()
 	defer os.Remove(f.Name())
 
-	if chart.Namespace == "" {
+	if chart.Namespace != "" {
 		if _, err := f.Write([]byte(chart.Namespace)); err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("writing namespace to temp file: %w", err)
 		}
 
-		//fileOutput, _ := os.ReadFile(f.Name())
-		//fmt.Println(string(fileOutput))
-
-		grepCmd := exec.Command("kubectl", "apply", "-f", f.Name())
-
-		output, _ := grepCmd.Output()
-		fmt.Print(string(output))
-
-		if strings.Contains(string(output), "created") {
-			time.Sleep(1 * time.Second)
-		}
-
-		// Reset file
-		err = f.Truncate(0)
+		output, err := kubectlApply(f)
 		if err != nil {
-			return
+			return err
 		}
+		fmt.Print(output)
 
-		_, err = f.Seek(0, 0)
+		if err := f.Truncate(0); err != nil {
+			return fmt.Errorf("truncating temp file: %w", err)
+		}
+		if _, err := f.Seek(0, 0); err != nil {
+			return fmt.Errorf("seeking temp file: %w", err)
+		}
 	}
 
-	// Write chart
 	if _, err := f.Write([]byte(chart.Content)); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("writing chart to temp file: %w", err)
 	}
 
-	//fileOutput, _ = os.ReadFile(f.Name())
-	//fmt.Println(string(fileOutput))
+	output, err := kubectlApply(f)
+	if err != nil {
+		return err
+	}
+	fmt.Print(output)
 
-	grepCmd := exec.Command("kubectl", "apply", "-f", f.Name())
-
-	output, _ := grepCmd.Output()
-	fmt.Println(string(output))
+	return nil
 }
 
 func (chart *Chart) Combined() string {

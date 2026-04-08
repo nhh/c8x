@@ -44,6 +44,47 @@ var packageJson = `{
 }
 `
 
+func renderPackageJson(name string) ([]byte, error) {
+	t, err := template.New("text").Parse(packageJson)
+	if err != nil {
+		return nil, fmt.Errorf("parsing package.json template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	err = t.Execute(&buf, map[string]interface{}{"packageName": name})
+	if err != nil {
+		return nil, fmt.Errorf("executing package.json template: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func initChart(dir string, name string) error {
+	pkgJson, err := renderPackageJson(name)
+	if err != nil {
+		return err
+	}
+
+	chartPath := path.Join(dir, name)
+
+	err = os.Mkdir(chartPath, 0777)
+	if err != nil {
+		return fmt.Errorf("creating chart directory: %w", err)
+	}
+
+	err = os.WriteFile(path.Join(chartPath, "package.json"), pkgJson, 0666)
+	if err != nil {
+		return fmt.Errorf("writing package.json: %w", err)
+	}
+
+	err = os.WriteFile(path.Join(chartPath, "chart.ts"), []byte(chartTsx), 0666)
+	if err != nil {
+		return fmt.Errorf("writing chart.ts: %w", err)
+	}
+
+	return nil
+}
+
 var newCmd = &cobra.Command{
 	Use:     "init",
 	Short:   "Initialize a c8x chart. (index.ts, package.json)",
@@ -54,31 +95,9 @@ var newCmd = &cobra.Command{
 			os.Exit(-1)
 		}
 
-		chartPath := args[0]
+		chartName := args[0]
 
-		t, _ := template.New("text").Parse(packageJson)
-
-		pkgjson := bytes.Buffer{}
-		err := t.Execute(&pkgjson, map[string]interface{}{"packageName": chartPath})
-
-		if err != nil {
-			panic(err)
-		}
-
-		err = os.Mkdir(chartPath, 0777)
-
-		if err != nil {
-			panic(err)
-		}
-
-		err = os.WriteFile(path.Join(chartPath, "package.json"), pkgjson.Bytes(), 0666)
-
-		if err != nil {
-			panic(err)
-		}
-
-		err = os.WriteFile(path.Join(chartPath, "chart.ts"), []byte(chartTsx), 0666)
-
+		err := initChart(".", chartName)
 		if err != nil {
 			panic(err)
 		}

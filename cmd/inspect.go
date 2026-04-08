@@ -6,8 +6,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kubernetix/c8x/internal/k8s"
-	"github.com/kubernetix/c8x/internal/ts"
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
@@ -119,13 +117,6 @@ func (m model) footerView() string {
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func init() {
 	rootCmd.AddCommand(inspect)
 }
@@ -139,14 +130,13 @@ var inspect = &cobra.Command{
 			os.Exit(-1)
 		}
 
-		path := args[0]
+		chart, err := compileChart(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 
-		code := ts.Load(path, Verbose)
-		export := ts.Run(code, path)
-
-		kubectlYaml := k8s.PatchAndTransform(export)
-
-		md := fmt.Sprintf("```yml%s```", kubectlYaml.Combined())
+		md := fmt.Sprintf("```yml%s```", chart.Combined())
 
 		out, _ := glamour.Render(md, "dark")
 
