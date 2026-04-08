@@ -1,0 +1,30 @@
+{
+  "name": "@c8x/cli",
+  "version": "0.0.20",
+  "description": "CLI for c8x - deploy Kubernetes charts with TypeScript",
+  "bin": {
+    "c8x": "bin/c8x.js"
+  },
+  "files": [
+    "bin/c8x.js"
+  ],
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "c8x",
+    "cli"
+  ],
+  "author": "Niklas Hanft <niklas.hanft@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhh/c8x.git"
+  },
+  "license": "MIT",
+  "optionalDependencies": {
+    "@c8x/cli-linux-x64": "0.0.20",
+    "@c8x/cli-linux-arm64": "0.0.20",
+    "@c8x/cli-darwin-x64": "0.0.20",
+    "@c8x/cli-darwin-arm64": "0.0.20",
+    "@c8x/cli-win32-x64": "0.0.20"
+  }
+}

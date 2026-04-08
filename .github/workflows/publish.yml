@@ -1,97 +1,114 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Build and release binaries
+name: Build and publish
 
 on:
   push:
     tags:
-      - "v*.*.*-alpha"
+      - "v*.*.*"
 
 jobs:
-  build-linux:
-    if: startsWith(github.ref, 'refs/tags/')
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            npm_pkg: cli-linux-x64
+            binary: c8x
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            npm_pkg: cli-linux-arm64
+            binary: c8x
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            npm_pkg: cli-darwin-x64
+            binary: c8x
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            npm_pkg: cli-darwin-arm64
+            binary: c8x
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            npm_pkg: cli-win32-x64
+            binary: c8x.exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -o ${{ matrix.binary }} .
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.npm_pkg }}
+          path: ${{ matrix.binary }}
+          retention-days: 1
+
+  publish:
+    needs: build
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-    - name: Build
-      run: go build -o c8x-linux-x86_64 .
-    - name: Upload Go test results
-      uses: actions/upload-artifact@v4
-      with:
-        retention-days: 7
-        name: c8x-linux-x86_64
-        path: ./c8x-linux-x86_64
-  build-macos-x64:
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Build
-        run: go build -o c8x-darwin-x86_64 .
-      - name: Upload Go test results
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 7
-          name: c8x-darwin-x86_64
-          path: ./c8x-darwin-x86_64
-  build-macos-arm:
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Build
-        run: go build -o c8x-darwin-arm64 .
-      - name: Upload Go test results
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 7
-          name: c8x-darwin-x86_64
-          path: ./c8x-darwin-x86_64
-  build-windows:
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Build
-        run: go build -o c8x-win32-x86_64.exe .
-      - name: Upload Go test results
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 7
-          name: c8x-win32-x86_64.exe
-          path: ./c8x-win32-x86_64.exe
-  release:
-    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
-    needs:
-      - build-windows
-      - build-linux
-      - build-macos-arm
-      - build-macos-x64
-    runs-on: ubuntu-latest
     steps:
-    # Downloads all artifacts:
-    - name: Download a single artifact
-      uses: actions/download-artifact@v4
-    - name: Create github release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "./*/c8x-*"
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy binaries into platform packages
+        run: |
+          for pkg in cli-linux-x64 cli-linux-arm64 cli-darwin-x64 cli-darwin-arm64 cli-win32-x64; do
+            cp artifacts/$pkg/* npm/$pkg/
+            chmod +x npm/$pkg/c8x* 2>/dev/null || true
+          done
+
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in cli-linux-x64 cli-linux-arm64 cli-darwin-x64 cli-darwin-arm64 cli-win32-x64; do
+            cd npm/$pkg
+            npm publish --access public
+            cd ../..
+          done
+
+      - name: Publish @c8x/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd npm/cli
+          npm publish --access public
+
+      - name: Publish c8x (types)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd npm/c8x
+          npm publish --access public
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/*/c8x*"

@@ -1,0 +1,16 @@
+{
+  "name": "@c8x/cli-darwin-arm64",
+  "version": "0.0.20",
+  "description": "c8x CLI binary for macOS ARM64 (Apple Silicon)",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "bin": {
+    "c8x": "c8x"
+  },
+  "files": ["c8x"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhh/c8x.git"
+  }
+}

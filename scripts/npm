@@ -1,9 +1,0 @@
-go build -o c8x ./main.go
-
-mv c8x npm/
-
-cd npm
-
-npm publish --access public
-
-rm c8x

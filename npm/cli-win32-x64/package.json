@@ -1,0 +1,16 @@
+{
+  "name": "@c8x/cli-win32-x64",
+  "version": "0.0.20",
+  "description": "c8x CLI binary for Windows x64",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "bin": {
+    "c8x": "c8x.exe"
+  },
+  "files": ["c8x.exe"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhh/c8x.git"
+  }
+}
