@@ -244,6 +244,7 @@ func TestDetectCIGitHub(t *testing.T) {
 }
 
 func TestDetectCIGitLab(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
 	t.Setenv("GITLAB_CI", "true")
 	t.Setenv("CI_PIPELINE_ID", "99")
 	t.Setenv("GITLAB_USER_LOGIN", "dev")
@@ -259,6 +260,8 @@ func TestDetectCIGitLab(t *testing.T) {
 }
 
 func TestDetectCIJenkins(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
+	t.Setenv("GITLAB_CI", "")
 	t.Setenv("JENKINS_URL", "http://jenkins.local")
 	t.Setenv("BUILD_NUMBER", "55")
 
@@ -272,7 +275,10 @@ func TestDetectCIJenkins(t *testing.T) {
 }
 
 func TestDetectCINone(t *testing.T) {
-	// No CI env vars set
+	t.Setenv("GITHUB_ACTIONS", "")
+	t.Setenv("GITLAB_CI", "")
+	t.Setenv("JENKINS_URL", "")
+
 	ci := DetectCI()
 	if ci != nil {
 		t.Fatalf("expected nil, got %+v", ci)
