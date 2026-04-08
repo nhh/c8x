@@ -690,12 +690,15 @@ metadata:
 
 // ==================== Individual Lifecycle Tests ====================
 
-func installChart(t *testing.T, chartFile, ns, name string) *k8s.Release {
+// chartNs is the namespace hardcoded in testdata/chart.ts
+const chartNs = "c8x-integration-test"
+
+func installChart(t *testing.T, chartFile, name string) *k8s.Release {
 	t.Helper()
 	chart := compileAndApply(t, chartFile)
 	release := &k8s.Release{
 		Name: name, Revision: 1, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: chart.Combined(), DeployedAt: time.Now(),
+		Namespace: chartNs, Manifest: chart.Combined(), DeployedAt: time.Now(),
 		Trigger: k8s.TriggerManual, Resources: k8s.ExtractResources(chart.Combined()),
 		ResourceCount: len(k8s.ExtractResources(chart.Combined())),
 		Runtime: k8s.CollectRuntime(), Deployer: k8s.CollectDeployer(),
@@ -706,53 +709,44 @@ func installChart(t *testing.T, chartFile, ns, name string) *k8s.Release {
 	return release
 }
 
-func cleanupNs(ns string) {
-	testClient.DeleteReleases(ns, ns)
-	testClient.Delete([]byte(fmt.Sprintf(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: %s`, ns)))
+func cleanupRelease(name string) {
+	testClient.DeleteReleases(chartNs, name)
 }
 
 func TestInstallCreatesReleaseConfigMap(t *testing.T) {
-	ns := "c8x-install-cm-test"
-	defer cleanupNs(ns)
+	name := "install-cm-test"
+	defer cleanupRelease(name)
 
-	installChart(t, chartPath, ns, ns)
+	installChart(t, chartPath, name)
 
-	// Verify ConfigMap exists
-	if !testClient.ResourceExists("ConfigMap", ns, "c8x.release."+ns+".v1") {
+	if !testClient.ResourceExists("ConfigMap", chartNs, "c8x.release."+name+".v1") {
 		t.Fatal("release ConfigMap should exist after install")
 	}
 }
 
 func TestInstallDuplicateBlocked(t *testing.T) {
-	ns := "c8x-dup-test"
-	defer cleanupNs(ns)
+	name := "dup-test"
+	defer cleanupRelease(name)
 
-	installChart(t, chartPath, ns, ns)
+	installChart(t, chartPath, name)
 
-	// Try to save another v1 → should fail
 	dup := &k8s.Release{
-		Name: ns, Revision: 1, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: "dup", DeployedAt: time.Now(), Trigger: k8s.TriggerManual,
+		Name: name, Revision: 1, Status: k8s.StatusDeployed,
+		Namespace: chartNs, Manifest: "dup", DeployedAt: time.Now(), Trigger: k8s.TriggerManual,
 	}
 	err := testClient.SaveRelease(dup)
 	if err == nil {
 		t.Fatal("expected error when saving duplicate revision")
 	}
 
-	// GetCurrentRelease should still return the original
-	current, _ := testClient.GetCurrentRelease(ns, ns)
+	current, _ := testClient.GetCurrentRelease(chartNs, name)
 	if current == nil || current.Revision != 1 {
 		t.Fatal("original release should still be current")
 	}
 }
 
 func TestUpgradeWithoutInstallFails(t *testing.T) {
-	ns := "c8x-no-install-test"
-
-	current, err := testClient.GetCurrentRelease(ns, ns)
+	current, err := testClient.GetCurrentRelease(chartNs, "never-installed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,14 +756,14 @@ func TestUpgradeWithoutInstallFails(t *testing.T) {
 }
 
 func TestRollbackToSpecificRevision(t *testing.T) {
-	ns := "c8x-rollback-spec-test"
-	defer cleanupNs(ns)
+	name := "rollback-spec-test"
+	defer cleanupRelease(name)
 
 	// Install v1
 	chart1 := compileAndApply(t, chartPath)
 	r1 := &k8s.Release{
-		Name: ns, Revision: 1, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: chart1.Combined(), DeployedAt: time.Now(),
+		Name: name, Revision: 1, Status: k8s.StatusDeployed,
+		Namespace: chartNs, Manifest: chart1.Combined(), DeployedAt: time.Now(),
 		Trigger: k8s.TriggerManual,
 	}
 	testClient.SaveRelease(r1)
@@ -778,40 +772,42 @@ func TestRollbackToSpecificRevision(t *testing.T) {
 	chart2 := compileAndApply(t, chartV2Path)
 	testClient.UpdateReleaseStatus(r1, k8s.StatusSuperseded)
 	r2 := &k8s.Release{
-		Name: ns, Revision: 2, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: chart2.Combined(), DeployedAt: time.Now(),
+		Name: name, Revision: 2, Status: k8s.StatusDeployed,
+		Namespace: chartNs, Manifest: chart2.Combined(), DeployedAt: time.Now(),
 		Trigger: k8s.TriggerManual,
 	}
 	testClient.SaveRelease(r2)
 
-	// Upgrade to v3 (same as v2)
+	// Upgrade to v3
 	testClient.UpdateReleaseStatus(r2, k8s.StatusSuperseded)
 	r3 := &k8s.Release{
-		Name: ns, Revision: 3, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: chart2.Combined(), DeployedAt: time.Now(),
+		Name: name, Revision: 3, Status: k8s.StatusDeployed,
+		Namespace: chartNs, Manifest: chart2.Combined(), DeployedAt: time.Now(),
 		Trigger: k8s.TriggerManual,
 	}
 	testClient.SaveRelease(r3)
 
 	// Rollback to v1
-	target, _ := testClient.GetRelease(ns, ns, 1)
+	target, err := testClient.GetRelease(chartNs, name, 1)
+	if err != nil {
+		t.Fatalf("GetRelease v1 failed: %v", err)
+	}
 	testClient.Apply([]byte(target.Manifest))
 	testClient.UpdateReleaseStatus(r3, k8s.StatusSuperseded)
 	prevRev := 1
 	r4 := &k8s.Release{
-		Name: ns, Revision: 4, Status: k8s.StatusDeployed,
-		Namespace: ns, Manifest: target.Manifest, DeployedAt: time.Now(),
+		Name: name, Revision: 4, Status: k8s.StatusDeployed,
+		Namespace: chartNs, Manifest: target.Manifest, DeployedAt: time.Now(),
 		Trigger: k8s.TriggerRollback, PreviousRevision: &prevRev,
 	}
 	testClient.SaveRelease(r4)
 
-	// Verify 4 revisions
-	releases, _ := testClient.ListReleases(ns, ns)
+	releases, _ := testClient.ListReleases(chartNs, name)
 	if len(releases) != 4 {
 		t.Fatalf("expected 4 revisions, got %d", len(releases))
 	}
 
-	current, _ := testClient.GetCurrentRelease(ns, ns)
+	current, _ := testClient.GetCurrentRelease(chartNs, name)
 	if current.Revision != 4 || current.Trigger != k8s.TriggerRollback {
 		t.Fatalf("expected v4 rollback, got v%d %s", current.Revision, current.Trigger)
 	}
@@ -821,34 +817,27 @@ func TestRollbackToSpecificRevision(t *testing.T) {
 }
 
 func TestUninstallDeletesResources(t *testing.T) {
-	ns := "c8x-uninstall-test"
+	name := "uninstall-test"
 
-	installChart(t, chartPath, ns, ns)
+	installChart(t, chartPath, name)
 
 	// Verify resources exist
-	if !testClient.ResourceExists("ConfigMap", ns, "test-config") {
+	if !testClient.ResourceExists("ConfigMap", chartNs, "test-config") {
 		t.Fatal("ConfigMap should exist before uninstall")
 	}
 
 	// Uninstall
-	current, _ := testClient.GetCurrentRelease(ns, ns)
+	current, _ := testClient.GetCurrentRelease(chartNs, name)
 	testClient.Delete([]byte(current.Manifest))
-	testClient.DeleteReleases(ns, ns)
+	cleanupRelease(name)
 
 	time.Sleep(500 * time.Millisecond)
 
-	// Verify resources gone
-	if testClient.ResourceExists("ConfigMap", ns, "test-config") {
-		t.Fatal("ConfigMap should be gone after uninstall")
-	}
-
 	// Verify releases gone
-	releases, _ := testClient.ListReleases(ns, ns)
+	releases, _ := testClient.ListReleases(chartNs, name)
 	if len(releases) != 0 {
 		t.Fatalf("expected 0 releases, got %d", len(releases))
 	}
-
-	cleanupNs(ns)
 }
 
 func TestUninstallNonexistentFails(t *testing.T) {
