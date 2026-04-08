@@ -83,16 +83,23 @@ var rollbackCmd = &cobra.Command{
 
 		// Save new revision with the old manifest
 		newRevision := current.Revision + 1
+		prevRev := targetRevision
 		release := &k8s.Release{
-			Name:         name,
-			Revision:     newRevision,
-			Status:       k8s.StatusDeployed,
-			ChartName:    target.ChartName,
-			ChartVersion: target.ChartVersion,
-			Namespace:    namespace,
-			Manifest:     target.Manifest,
-			Env:          target.Env,
-			DeployedAt:   time.Now(),
+			Name:             name,
+			Revision:         newRevision,
+			Status:           k8s.StatusDeployed,
+			ChartName:        target.ChartName,
+			ChartVersion:     target.ChartVersion,
+			Namespace:        namespace,
+			Manifest:         target.Manifest,
+			DeployedAt:       time.Now(),
+			Resources:        k8s.ExtractResources(target.Manifest),
+			ResourceCount:    len(k8s.ExtractResources(target.Manifest)),
+			Trigger:          k8s.TriggerRollback,
+			PreviousRevision: &prevRev,
+			Runtime:          k8s.CollectRuntime(),
+			Deployer:         k8s.CollectDeployer(),
+			CI:               k8s.DetectCI(),
 		}
 
 		if err := client.SaveRelease(release); err != nil {

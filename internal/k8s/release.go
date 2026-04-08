@@ -2,10 +2,15 @@ package k8s
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -18,24 +23,151 @@ const (
 	StatusSuperseded = "superseded"
 	StatusFailed     = "failed"
 
-	LabelManagedBy  = "app.kubernetes.io/managed-by"
-	LabelRelease    = "c8x.io/release-name"
-	LabelRevision   = "c8x.io/revision"
-	LabelStatus     = "c8x.io/status"
-	ManagedByValue  = "c8x"
+	TriggerManual   = "manual"
+	TriggerCI       = "ci"
+	TriggerRollback = "rollback"
+
+	LabelManagedBy = "app.kubernetes.io/managed-by"
+	LabelRelease   = "c8x.io/release-name"
+	LabelRevision  = "c8x.io/revision"
+	LabelStatus    = "c8x.io/status"
+	ManagedByValue = "c8x"
 )
 
 // Release represents a deployed chart revision stored as a ConfigMap.
 type Release struct {
-	Name         string            `json:"name"`
-	Revision     int               `json:"revision"`
-	Status       string            `json:"status"`
-	ChartName    string            `json:"chartName"`
-	ChartVersion string            `json:"chartVersion"`
-	Namespace    string            `json:"namespace"`
-	Manifest     string            `json:"manifest"`
-	Env          map[string]string `json:"env,omitempty"`
-	DeployedAt   time.Time         `json:"deployedAt"`
+	Name         string    `json:"name"`
+	Revision     int       `json:"revision"`
+	Status       string    `json:"status"`
+	ChartName    string    `json:"chartName"`
+	ChartVersion string    `json:"chartVersion"`
+	Namespace    string    `json:"namespace"`
+	Manifest     string    `json:"manifest"`
+	DeployedAt   time.Time `json:"deployedAt"`
+
+	// Metadata
+	Permissions      *ReleasePermissions `json:"permissions,omitempty"`
+	Resources        []string            `json:"resources,omitempty"`
+	ResourceCount    int                 `json:"resourceCount"`
+	Duration         string              `json:"duration,omitempty"`
+	Trigger          string              `json:"trigger"`
+	PreviousRevision *int                `json:"previousRevision,omitempty"`
+	Source           *ReleaseSource      `json:"source,omitempty"`
+	Runtime          *ReleaseRuntime     `json:"runtime,omitempty"`
+	Deployer         *ReleaseDeployer    `json:"deployer,omitempty"`
+	CI               *ReleaseCI          `json:"ci,omitempty"`
+}
+
+type ReleasePermissions struct {
+	File    bool `json:"file"`
+	Http    bool `json:"http"`
+	Cluster bool `json:"cluster"`
+}
+
+type ReleaseSource struct {
+	File     string `json:"file"`
+	Checksum string `json:"checksum"`
+}
+
+type ReleaseRuntime struct {
+	C8xVersion string `json:"c8xVersion"`
+	OS         string `json:"os"`
+	Arch       string `json:"arch"`
+}
+
+type ReleaseDeployer struct {
+	Hostname string `json:"hostname"`
+	User     string `json:"user"`
+}
+
+type ReleaseCI struct {
+	Provider string `json:"provider"`
+	RunID    string `json:"runId,omitempty"`
+	Actor    string `json:"actor,omitempty"`
+	Ref      string `json:"ref,omitempty"`
+}
+
+// ExtractResources parses a YAML manifest and returns resource identifiers like "Deployment/app".
+func ExtractResources(manifest string) []string {
+	var resources []string
+	for _, doc := range strings.Split(manifest, "---") {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+		var kind, name string
+		for _, line := range strings.Split(doc, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "kind:") {
+				kind = strings.TrimSpace(strings.TrimPrefix(trimmed, "kind:"))
+			}
+			if strings.HasPrefix(trimmed, "name:") && name == "" {
+				name = strings.TrimSpace(strings.TrimPrefix(trimmed, "name:"))
+			}
+		}
+		if kind != "" && name != "" {
+			resources = append(resources, kind+"/"+name)
+		}
+	}
+	return resources
+}
+
+// DetectCI detects CI environment from well-known environment variables.
+func DetectCI() *ReleaseCI {
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		return &ReleaseCI{
+			Provider: "github",
+			RunID:    os.Getenv("GITHUB_RUN_ID"),
+			Actor:    os.Getenv("GITHUB_ACTOR"),
+			Ref:      os.Getenv("GITHUB_REF"),
+		}
+	}
+	if os.Getenv("GITLAB_CI") == "true" {
+		return &ReleaseCI{
+			Provider: "gitlab",
+			RunID:    os.Getenv("CI_PIPELINE_ID"),
+			Actor:    os.Getenv("GITLAB_USER_LOGIN"),
+			Ref:      os.Getenv("CI_COMMIT_REF_NAME"),
+		}
+	}
+	if os.Getenv("JENKINS_URL") != "" {
+		return &ReleaseCI{
+			Provider: "jenkins",
+			RunID:    os.Getenv("BUILD_NUMBER"),
+			Actor:    os.Getenv("BUILD_USER"),
+			Ref:      os.Getenv("GIT_BRANCH"),
+		}
+	}
+	return nil
+}
+
+// CollectDeployer gathers info about the machine performing the deploy.
+func CollectDeployer() *ReleaseDeployer {
+	hostname, _ := os.Hostname()
+	user := os.Getenv("USER")
+	if user == "" {
+		user = os.Getenv("USERNAME") // Windows
+	}
+	return &ReleaseDeployer{Hostname: hostname, User: user}
+}
+
+// CollectRuntime gathers c8x runtime info.
+func CollectRuntime() *ReleaseRuntime {
+	version := "dev"
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+	return &ReleaseRuntime{C8xVersion: version, OS: runtime.GOOS, Arch: runtime.GOARCH}
+}
+
+// CollectSource gathers info about the chart source file.
+func CollectSource(filePath string) *ReleaseSource {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return &ReleaseSource{File: filePath}
+	}
+	hash := sha256.Sum256(data)
+	return &ReleaseSource{File: filePath, Checksum: fmt.Sprintf("sha256:%x", hash)}
 }
 
 func releaseConfigMapName(name string, revision int) string {
@@ -64,9 +196,7 @@ func (c *Client) SaveRelease(r *Release) error {
 			Namespace: r.Namespace,
 			Labels:    releaseLabels(r),
 		},
-		Data: map[string]string{
-			"release": string(data),
-		},
+		Data: map[string]string{"release": string(data)},
 	}
 
 	_, err = c.clientset.CoreV1().ConfigMaps(r.Namespace).Create(
@@ -114,11 +244,9 @@ func (c *Client) GetCurrentRelease(namespace, name string) (*Release, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing releases: %w", err)
 	}
-
 	if len(cms.Items) == 0 {
 		return nil, nil
 	}
-
 	return parseRelease(&cms.Items[0])
 }
 
@@ -163,7 +291,6 @@ func (c *Client) ListReleases(namespace, name string) ([]*Release, error) {
 	sort.Slice(releases, func(i, j int) bool {
 		return releases[i].Revision < releases[j].Revision
 	})
-
 	return releases, nil
 }
 
@@ -187,11 +314,9 @@ func (c *Client) DeleteOldRevisions(namespace, name string, keepMax int) error {
 	if err != nil {
 		return err
 	}
-
 	if len(releases) <= keepMax {
 		return nil
 	}
-
 	toDelete := releases[:len(releases)-keepMax]
 	for _, r := range toDelete {
 		cmName := releaseConfigMapName(r.Name, r.Revision)

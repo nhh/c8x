@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/kubernetix/c8x/internal/k8s"
@@ -57,18 +56,6 @@ func compileChart(path string, perms ts.Permissions) (k8s.Chart, k8s.ChartExport
 	return k8s.PatchAndTransform(export), export, nil
 }
 
-func collectEnv() map[string]string {
-	env := make(map[string]string)
-	for _, e := range os.Environ() {
-		parts := strings.SplitN(e, "=", 2)
-		if strings.HasPrefix(parts[0], "C8X_") && len(parts) == 2 {
-			key := strings.TrimPrefix(parts[0], "C8X_")
-			env[key] = parts[1]
-		}
-	}
-	return env
-}
-
 var install = &cobra.Command{
 	Use:   "install",
 	Short: "Install a chart file into your k8s cluster",
@@ -114,26 +101,44 @@ var install = &cobra.Command{
 		}
 
 		// Apply
+		start := time.Now()
 		if err := k8s.ApplyChart(client, chart); err != nil {
 			fmt.Fprintf(os.Stderr, "Error applying chart: %v\n", err)
 			os.Exit(1)
 		}
+		duration := time.Since(start)
+
+		// Collect metadata
+		manifest := chart.Combined()
+		resources := k8s.ExtractResources(manifest)
+		permsUsed := buildPermissions()
 
 		// Save release state
 		release := &k8s.Release{
-			Name:       name,
-			Revision:   1,
-			Status:     k8s.StatusDeployed,
-			Namespace:  namespace,
-			Manifest:   chart.Combined(),
-			Env:        collectEnv(),
-			DeployedAt: time.Now(),
+			Name:          name,
+			Revision:      1,
+			Status:        k8s.StatusDeployed,
+			Namespace:     namespace,
+			Manifest:      manifest,
+			DeployedAt:    time.Now(),
+			Permissions:   &k8s.ReleasePermissions{File: permsUsed.File, Http: permsUsed.Http, Cluster: permsUsed.Cluster},
+			Resources:     resources,
+			ResourceCount: len(resources),
+			Duration:      duration.Round(time.Millisecond).String(),
+			Trigger:       k8s.TriggerManual,
+			Source:        k8s.CollectSource(args[0]),
+			Runtime:       k8s.CollectRuntime(),
+			Deployer:      k8s.CollectDeployer(),
+			CI:            k8s.DetectCI(),
+		}
+		if release.CI != nil {
+			release.Trigger = k8s.TriggerCI
 		}
 
 		if err := client.SaveRelease(release); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: chart applied but failed to save release state: %v\n", err)
 		}
 
-		fmt.Printf("Installed %s (revision 1) in namespace %s\n", name, namespace)
+		fmt.Printf("Installed %s (revision 1) in namespace %s [%s, %d resources]\n", name, namespace, release.Duration, release.ResourceCount)
 	},
 }

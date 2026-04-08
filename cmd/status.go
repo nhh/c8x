@@ -46,7 +46,34 @@ var statusCmd = &cobra.Command{
 		fmt.Printf("Namespace:  %s\n", release.Namespace)
 		fmt.Printf("Revision:   %d\n", release.Revision)
 		fmt.Printf("Status:     %s\n", release.Status)
-		fmt.Printf("Chart:      %s@%s\n", release.ChartName, release.ChartVersion)
+		fmt.Printf("Trigger:    %s\n", release.Trigger)
 		fmt.Printf("Deployed:   %s\n", release.DeployedAt.Format("2006-01-02 15:04:05"))
+		if release.Duration != "" {
+			fmt.Printf("Duration:   %s\n", release.Duration)
+		}
+		fmt.Printf("Resources:  %d\n", release.ResourceCount)
+		if len(release.Resources) > 0 {
+			for _, r := range release.Resources {
+				fmt.Printf("            - %s\n", r)
+			}
+		}
+		if release.Source != nil {
+			fmt.Printf("Source:     %s\n", release.Source.File)
+			if release.Source.Checksum != "" {
+				fmt.Printf("Checksum:   %s\n", release.Source.Checksum)
+			}
+		}
+		if release.Deployer != nil {
+			fmt.Printf("Deployer:   %s@%s\n", release.Deployer.User, release.Deployer.Hostname)
+		}
+		if release.Runtime != nil {
+			fmt.Printf("Runtime:    c8x %s (%s/%s)\n", release.Runtime.C8xVersion, release.Runtime.OS, release.Runtime.Arch)
+		}
+		if release.CI != nil {
+			fmt.Printf("CI:         %s (run %s by %s)\n", release.CI.Provider, release.CI.RunID, release.CI.Actor)
+		}
+		if release.PreviousRevision != nil {
+			fmt.Printf("Rollback:   from revision %d\n", *release.PreviousRevision)
+		}
 	},
 }

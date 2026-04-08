@@ -45,14 +45,23 @@ var historyCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("%-10s %-12s %-25s %s\n", "REVISION", "STATUS", "DEPLOYED", "CHART")
+		fmt.Printf("%-10s %-12s %-10s %-10s %-20s %-25s\n", "REVISION", "STATUS", "TRIGGER", "RESOURCES", "DEPLOYER", "DEPLOYED")
 		for _, r := range releases {
-			fmt.Printf("%-10d %-12s %-25s %s@%s\n",
+			deployer := ""
+			if r.Deployer != nil {
+				deployer = r.Deployer.User + "@" + r.Deployer.Hostname
+			}
+			trigger := r.Trigger
+			if trigger == "" {
+				trigger = "manual"
+			}
+			fmt.Printf("%-10d %-12s %-10s %-10d %-20s %-25s\n",
 				r.Revision,
 				r.Status,
+				trigger,
+				r.ResourceCount,
+				deployer,
 				r.DeployedAt.Format("2006-01-02 15:04:05"),
-				r.ChartName,
-				r.ChartVersion,
 			)
 		}
 	},

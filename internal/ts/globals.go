@@ -375,27 +375,25 @@ func injectRelease(vm *goja.Runtime, perms Permissions, namespace, releaseName s
 		fetchOnce()
 		if release == nil {
 			return map[string]interface{}{
-				"exists":       false,
-				"revision":     0,
-				"status":       "",
-				"chartName":    "",
-				"chartVersion": "",
-				"env":          map[string]interface{}{},
-				"deployedAt":   "",
+				"exists":        false,
+				"revision":      0,
+				"status":        "",
+				"chartName":     "",
+				"chartVersion":  "",
+				"trigger":       "",
+				"resourceCount": 0,
+				"deployedAt":    "",
 			}
 		}
-		envMap := make(map[string]interface{}, len(release.Env))
-		for k, v := range release.Env {
-			envMap[k] = v
-		}
 		return map[string]interface{}{
-			"exists":       true,
-			"revision":     release.Revision,
-			"status":       release.Status,
-			"chartName":    release.ChartName,
-			"chartVersion": release.ChartVersion,
-			"env":          envMap,
-			"deployedAt":   release.DeployedAt.Format("2006-01-02T15:04:05Z"),
+			"exists":        true,
+			"revision":      release.Revision,
+			"status":        release.Status,
+			"chartName":     release.ChartName,
+			"chartVersion":  release.ChartVersion,
+			"trigger":       release.Trigger,
+			"resourceCount": release.ResourceCount,
+			"deployedAt":    release.DeployedAt.Format("2006-01-02T15:04:05Z"),
 		}
 	})
 
@@ -415,7 +413,8 @@ func injectRelease(vm *goja.Runtime, perms Permissions, namespace, releaseName s
 				get status() { return get().status; },
 				get chartName() { return get().chartName; },
 				get chartVersion() { return get().chartVersion; },
-				get env() { return get().env; },
+				get trigger() { return get().trigger; },
+				get resourceCount() { return get().resourceCount; },
 				get deployedAt() { return get().deployedAt; },
 			};
 		})();

@@ -118,13 +118,13 @@ func TestReleaseRevisionAsLabel(t *testing.T) {
 	}
 }
 
-func TestReleaseEnvAccess(t *testing.T) {
+func TestReleaseTriggerAccess(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0644)
 
 	code := `
-		var prevDomain = typeof $release !== 'undefined' && $release.exists
-			? $release.env.WP_DOMAIN || "none"
+		var trigger = typeof $release !== 'undefined' && $release.exists
+			? $release.trigger || "unknown"
 			: "none";
 
 		export default () => ({
@@ -132,7 +132,7 @@ func TestReleaseEnvAccess(t *testing.T) {
 			components: [{
 				apiVersion: "v1", kind: "ConfigMap",
 				metadata: { name: "info" },
-				data: { prevDomain: prevDomain }
+				data: { trigger: trigger }
 			}]
 		})
 	`
@@ -147,8 +147,8 @@ func TestReleaseEnvAccess(t *testing.T) {
 	}
 
 	data := export.Components[0]["data"].(map[string]interface{})
-	if data["prevDomain"] != "none" {
-		t.Fatalf("expected 'none' (no release), got %v", data["prevDomain"])
+	if data["trigger"] != "none" {
+		t.Fatalf("expected 'none' (no release), got %v", data["trigger"])
 	}
 }
 

@@ -118,8 +118,10 @@ declare global {
     readonly chartName: string;
     /** Chart version of the current release */
     readonly chartVersion: string;
-    /** Environment variables at the time of the current deployment */
-    readonly env: Record<string, string>;
+    /** How the release was triggered: "manual" | "ci" | "rollback" */
+    readonly trigger: string;
+    /** Number of K8s resources in the release */
+    readonly resourceCount: number;
     /** ISO timestamp of the current deployment */
     readonly deployedAt: string;
   };
